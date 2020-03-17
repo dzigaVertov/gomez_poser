@@ -5,7 +5,7 @@ import bpy
 from mathutils import Vector
 import bmesh
 
-# 1) Hacer que agregue todo el stroke al grupo de vertices de la armature.
+
 # 2) Cambiar a la opción swing para las constraints de los huesos de deformación
 # 3) Hacer que cada invocación ponga los huesos en un grupo diferente
 # 4) Hacer que funcione con el objeto seleccionado y con el último stroke dibujado o con todos los strokes seleccionados.
@@ -13,6 +13,21 @@ import bmesh
 
 D = bpy.data
 C = bpy.context
+
+
+class GopoProperties(bpy.types.PropertyGroup):
+    """
+    Variables de configuración de Gomez Poser
+    """
+
+    num_bones: bpy.props.IntProperty(name='gopo_num_bones', default=3, min=2)
+    num_bendy: bpy.props.IntProperty(
+        name='gopo_num_bendy', default=16, min=1, max=32)
+    initialized: bpy.props.BoolProperty(name='initialized', default=False)
+    ob_armature: bpy.props.PointerProperty(type=bpy.types.Object, poll=lambda self, object: object.type == 'ARMATURE')
+
+
+bpy.utils.register_class(GopoProperties)
 
 
 def add_auxiliary_meshes():
@@ -159,6 +174,7 @@ def add_stretch_to(armature, name, i):
     constr = pbones['boney-' + str(i-1)].constraints.new(type='STRETCH_TO')
     constr.target = armature
     constr.subtarget = name
+    constr.keep_axis = 'SWING_Y'
 
 
 def add_control_bones(armature, pos):
@@ -205,6 +221,7 @@ def add_armature(gp_ob, stroke, armature):
     for pt in stroke.points:
         pt.select = True
     bpy.ops.gpencil.vertex_group_assign(con)
+    mod.vertex_group = armature.name
 
 
 def get_vg_number(name):
@@ -279,21 +296,6 @@ def add_bones(armature, gp_ob):
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
-
-
-class GopoProperties(bpy.types.PropertyGroup):
-    """
-    Variables de configuración de Gomez Poser
-    """
-
-    num_bones: bpy.props.IntProperty(name='gopo_num_bones', default=3, min=2)
-    num_bendy: bpy.props.IntProperty(
-        name='gopo_num_bendy', default=16, min=1, max=32)
-    initialized: bpy.props.BoolProperty(name='initialized', default=False)
-    ob_armature: bpy.props.PointerProperty(type=bpy.types.Object, poll=lambda self, object: object.type == 'ARMATURE')
-
-
-bpy.utils.register_class(GopoProperties)
 
 
 class Gomez_OT_Poser(bpy.types.Operator):
