@@ -38,6 +38,8 @@ class FitCurves:
               Evaluate a Bezier curve at a particular parameter value
 
         """
+        v_temp : List[Vector]
+        
 
     @staticmethod
     def compute_max_error(points: List(Vector), first: int,
