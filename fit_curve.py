@@ -9,9 +9,59 @@ class FitCurves:
     MAXPOINTS = 10000
 
     @staticmethod
-    def compute_left_tangent(points: List[mathutils.Vector], end: int) -> Vector:
-        that_1 = (points[end+1] - points[end]).normalized()
+    def compute_left_tangent(points: List[Vector], end: int) -> Vector:
+        that_1 = points[end+1] - points[end]
+        that_1.normalize()
         return that_1
+
+    @staticmethod
+    def compute_right_tangent(points: List[Vector], end: int) -> Vector:
+        that_2 = points[end - 1] - points[end]
+        that_2.normalize()
+        return that_2
+
+    @staticmethod
+    def compute_center_tangent(points: List[Vector], center: int):
+        V1 = points[center - 1] - points[center]
+        V2 = points[center] - points[center+1]
+
+        that_center = Vector((0, 0, 0))
+        that_center.x = (V1.x + V2.x)/2
+        that_center.y = (V1.y + V2.y)/2
+        that_center.normalize()
+        return that_center
+
+    @staticmethod
+    def bezier_ii(degree: int, points: List[Vector], t: float):
+        """
+          Bezier :
+              Evaluate a Bezier curve at a particular parameter value
+
+        """
+
+    @staticmethod
+    def compute_max_error(points: List(Vector), first: int,
+                          last: int, bez_curve: List[Vector],
+                          u: List[float]) -> (float, int):
+        """
+           ComputeMaxError :
+         Find the maximum squared distance of digitized points
+          to fitted curve.
+
+        """
+        split_point = (last - first + 1)/2
+        max_dist = 0.0
+        P: Vector
+        for i in range(first+1, last):
+            P = bezier_ii(3, bez_curve, u[i-first])
+            v = P - points[i]
+            dist = v.length_squared
+
+            if dist >= max_dist:
+                max_dist = dist
+                split_point = i
+
+        return max_dist, split_point
 
     @staticmethod
     def fit_cubic(points, first, last, that_1, that_2, error):
