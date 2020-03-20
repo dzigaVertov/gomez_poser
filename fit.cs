@@ -189,6 +189,9 @@ public static class FitCurves
             return (bezCurve);
         }
 
+
+
+    
         /*
          *  Reparameterize:
          *  Given set of points and their parameterization, try to find
@@ -212,14 +215,6 @@ public static class FitCurves
         /*
          *  NewtonRaphsonRootFind :
          *  Use Newton-Raphson iteration to find better root.
-         */
-        static double NewtonRaphsonRootFind(Point[] Q,Point P,double u)
-        {
-            double      numerator, denominator;
-            Point[]     Q1 = new Point[3], Q2 = new Point[2];   /*  Q' and Q''          */
-            Point       Q_u, Q1_u, Q2_u; /*u evaluated at Q, Q', & Q''  */
-            double      uPrime;     /*  Improved u          */
-            int         i;
 
             /* Compute Q(u) */
             Q_u = BezierII(3, Q, u);
