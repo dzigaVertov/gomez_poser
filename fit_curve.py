@@ -1,11 +1,17 @@
 # Fit a bezier curve to a set of points
+
 from typing import List
 from mathutils import Vector, Matrix
 import numpy as np
+import bpy
 
 
 class FitCurves:
     # Fit the Bezier curves
+    bl_idname = "greasepencil.fitcurves"
+    bl_label = "Gposer fitter"
+    bl_options = {'REGISTER'}
+
     MAXPOINTS = 10000
 
     @staticmethod
@@ -114,7 +120,7 @@ class FitCurves:
         return u
 
     @staticmethod
-    def compute_max_error(points: List(Vector), first: int,
+    def compute_max_error(points: List[Vector], first: int,
                           last: int, bez_curve: List[Vector],
                           u: List[float]) -> (float, int):
         """
@@ -347,3 +353,15 @@ class FitCurves:
             points, 0, len(points) - 1, that_1, that_2, error)
 
         return result
+
+
+def register():
+    bpy.utils.register_class(FitCurves)
+
+
+def unregister():
+    bpy.utils.unregister_class(FitCurves)
+
+
+if __name__ == "__main__":
+    register()
