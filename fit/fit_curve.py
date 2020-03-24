@@ -1,9 +1,8 @@
 # Fit a bezier curve to a set of points
-
+import bpy
 from typing import List
 from mathutils import Vector, Matrix
 import numpy as np
-import bpy
 
 
 # Fit the Bezier curves
@@ -14,26 +13,27 @@ def compute_left_tangent(points: List[Vector], end: int) -> Vector:
     """
     Approximate unit tangent at startpoint of digitized curve
     """
-
     that_1 = points[end+1] - points[end]
+    if that_1.length == 0:
+        raise ZeroDivisionError
     that_1.normalize()
     return that_1
 
 
 def compute_right_tangent(points: List[Vector], end: int) -> Vector:
     """
-    ComputeRightTangent:
-    Approximate unit tangents at endpoints and center of digitized curve
+    Approximate unit tangents at endpoints of digitized curve
     """
     that_2 = points[end - 1] - points[end]
+    if that_2.length == 0:
+        raise ZeroDivisionError
     that_2.normalize()
     return that_2
 
 
 def compute_center_tangent(points: List[Vector], center: int):
     """
-    ComputeCenterTangent :
-    Approximate unit tangents at endpoints and center of digitized curve
+    Approximate unit tangents at center of digitized curve
     """
     v_1 = points[center - 1] - points[center]
     v_2 = points[center] - points[center+1]
@@ -41,6 +41,9 @@ def compute_center_tangent(points: List[Vector], center: int):
     that_center = Vector((0, 0, 0))
     that_center.x = (v_1.x + v_2.x)/2
     that_center.y = (v_1.y + v_2.y)/2
+    if that_center.length == 0.0:
+        raise ZeroDivisionError
+
     that_center.normalize()
     return that_center
 
@@ -128,7 +131,7 @@ def compute_max_error(points: List[Vector], first: int,
     max_dist = 0.0
     P: Vector
     for i in range(first+1, last):
-        P = FitCurves.bezier_ii(3, bez_curve, u[i-first])
+        P = bezier_ii(3, bez_curve, u[i-first])
         v = P - points[i]
         dist = v.length_squared
 
@@ -142,7 +145,7 @@ def compute_max_error(points: List[Vector], first: int,
 def generate_bezier(points: List[Vector], first: int, last: int, u_prime: List[float], that_1: Vector, that_2: Vector) -> List[Vector]:
 
     i: int
-    a = np.ndarray([FitCurves.MAXPOINTS, 2], dtype=Vector)
+    a = np.ndarray([MAXPOINTS, 2], dtype=Vector)
     n_pts: int
     C = Matrix([[0, 0], [0, 0]])
     X = Vector((0, 0))
@@ -155,10 +158,10 @@ def generate_bezier(points: List[Vector], first: int, last: int, u_prime: List[f
     for i in range(n_pts):
         v_1 = that_1
         v_2 = that_2
-        v_1 *= FitCurves.b_1(u_prime[i])
-        v_2 *= FitCurves.b_2(u_prime[i])
-        a.row[i][0] = v_1
-        a.row[i][1] = v_2
+        v_1 *= b_1(u_prime[i])
+        v_2 *= b_2(u_prime[i])
+        a[i][0] = v_1
+        a[i][1] = v_2
 
     # Create the C and X matrices
     for i in range(n_pts):
@@ -169,12 +172,12 @@ def generate_bezier(points: List[Vector], first: int, last: int, u_prime: List[f
 
         tmp = (points[first + i] -
                (
-                   (points[first] * FitCurves.b_0(u_prime[i])) +
+                   (points[first] * b_0(u_prime[i])) +
                    (
-                       (points[first] * FitCurves.b_1(u_prime[i])) +
+                       (points[first] * b_1(u_prime[i])) +
                        (
-                           (points[last] * FitCurves.b_2(u_prime[i])) +
-                           (points[last] * FitCurves.b_3(u_prime[i]))))
+                           (points[last] * b_2(u_prime[i])) +
+                           (points[last] * b_3(u_prime[i]))))
         )
         )
 
@@ -235,7 +238,7 @@ def newton_root_find(q: List[Vector], p: Vector, u: float) -> float:
     i: int
 
     # Compute Q(u)
-    q_u = FitCurves.bezier_ii(3, q, u)
+    q_u = bezier_ii(3, q, u)
 
     # Generate control vertices for Q'
     for i in range(3):
@@ -248,8 +251,8 @@ def newton_root_find(q: List[Vector], p: Vector, u: float) -> float:
         q_2[i].y = (q_1[i+1].y - q_1[i].y) * 2.0
 
     # Compute Q'(u) and Q''(u)
-    q1_u = FitCurves.bezier_ii(2, q_1, u)
-    q2_u = FitCurves.bezier_ii(1, q_2, u)
+    q1_u = bezier_ii(2, q_1, u)
+    q2_u = bezier_ii(1, q_2, u)
 
     # Compute f(u)/f'(u)
     numerator = (q_u.x - p.x) * (q1_u.x) + (q_u.y - p.y) * (q1_u.y)
@@ -274,7 +277,7 @@ def reparametrize(points: List[Vector], first: int, last: int, u: List[float], b
     u_prime = [0.0]*n_pts
 
     for i in range(first, last+1):
-        u_prime[i-first] = FitCurves.newton_root_find(
+        u_prime[i-first] = newton_root_find(
             bez_curve, points[i], u[i-first])
 
 
@@ -297,7 +300,7 @@ def fit_cubic(points, first, last, that_1, that_2, error):
 
     # Use heuristic if region only has two points in it
     if n_points == 2:
-        dist = (points[first] - points[last]).distance()/3
+        dist = (points[first] - points[last]).length/3
 
         bez_curve = [0]*4
         bez_curve[0] = points[first]
@@ -308,21 +311,21 @@ def fit_cubic(points, first, last, that_1, that_2, error):
         return bez_curve[1:]
 
     # Parametrize points, and attempt to fit curve
-    u = FitCurves.chord_length_parametrize(points, first, last)
-    bez_curve = FitCurves.generate_bezier(
+    u = chord_length_parametrize(points, first, last)
+    bez_curve = generate_bezier(
         points, first, last, u, that_1, that_2)
 
     # Find max deviation of points to fitted curve
-    max_error, split_point = FitCurves.compute_max_error(
+    max_error, split_point = compute_max_error(
         points, first, last, bez_curve, u)
 
     if max_error < iteration_error:
         for i in range(max_iterations):
-            u_prime = FitCurves.reparametrize(
+            u_prime = reparametrize(
                 points, first, last, u, bez_curve)
-            bez_curve = FitCurves.generate_bezier(
+            bez_curve = generate_bezier(
                 points, first, last, u_prime, that_1, that_2)
-            max_error, split_point = FitCurves.compute_max_error(
+            max_error, split_point = compute_max_error(
                 points, first, last, bez_curve, u_prime)
 
             if max_error < error:
@@ -331,20 +334,27 @@ def fit_cubic(points, first, last, that_1, that_2, error):
             u = u_prime
 
     # Fitting failed -- split at max error point and fit recursively
-    that_center = FitCurves.compute_center_tangent(points, split_point)
-    result = FitCurves.fit_cubic(points, split_point, last,
-                                 that_center, that_2, error)
+    that_center = compute_center_tangent(points, split_point)
+    result = fit_cubic(points, split_point, last,
+                       that_center, that_2, error)
 
     return result
 
 
 def fit_curve(points, error):
     # Unit tangent vector at endpoint
-    that_1 = FitCurves.compute_left_tangent(points, 0)
+    that_1 = compute_left_tangent(points, 0)
     # Unit tangent vector at endpoint
-    that_2 = FitCurves.compute_right_tangent(points, len(points) - 1)
+    that_2 = compute_right_tangent(points, len(points) - 1)
 
-    result = FitCurves.fit_cubic(
+    result = fit_cubic(
         points, 0, len(points) - 1, that_1, that_2, error)
 
     return result
+
+
+if __name__ == "__main__":
+    from random import randint
+    points = [Vector((randint(1, 10), randint(1, 10), randint(1, 10)))
+              for _ in range(20)]
+    print(fit_curve(points, 0.01))
