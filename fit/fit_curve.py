@@ -15,8 +15,10 @@ def compute_left_tangent(points: List[Vector], end: int) -> Vector:
     """
     that_1 = points[end+1] - points[end]
     if that_1.length == 0:
+        print('tangente nula')
         raise ZeroDivisionError
     that_1.normalize()
+
     return that_1
 
 
@@ -26,8 +28,10 @@ def compute_right_tangent(points: List[Vector], end: int) -> Vector:
     """
     that_2 = points[end - 1] - points[end]
     if that_2.length == 0:
+        print('tangente nula')
         raise ZeroDivisionError
     that_2.normalize()
+
     return that_2
 
 
@@ -101,21 +105,21 @@ def b_3(u: float) -> float:
     return u*u*u
 
 
-def chord_length_parametrize(d: List[Vector], first: int, last: int) -> List[float]:
+def chord_length_parametrize(points: List[Vector], first: int, last: int) -> List[float]:
     """
     Assign parameter values to digitized points
     using relative distances between points.
     """
-    i: int
-    u = [0.0]*(last-first + 1)
+    n_pts = last - first + 1
 
-    for i in range(first+1, last+1):
-        u[i-first] = u[i-first - 1] + (d[i-1] - d[i]).length
+    curr_points = points[first:last+1]
+    distances = [(curr_points[i+1] - curr_points[i]).length
+                       for i in range(n_pts-1)]
+    cum_distances = [sum(distances[:i]) for i in range(len(distances))]
+    dist_total = cum_distances[-1]
 
-    for i in range(first+1, last+1):
-        u[i-first] = u[i-first] / u[last-first]
-
-        return u
+    u = [i/dist_total for i in cum_distances]
+    return u
 
 
 def compute_max_error(points: List[Vector], first: int,
@@ -294,12 +298,14 @@ def fit_cubic(points, first, last, that_1, that_2, error):
     Vector tHatCenter;      /* Unit tangent vector at splitPoint */
     int i;
     """
+
     max_iterations = 4
     iteration_error = error * error
     n_points = last - first + 1
 
     # Use heuristic if region only has two points in it
     if n_points == 2:
+
         dist = (points[first] - points[last]).length/3
 
         bez_curve = [0]*4
@@ -308,6 +314,7 @@ def fit_cubic(points, first, last, that_1, that_2, error):
         bez_curve[1] = (that_1 * dist) + bez_curve[0]
         bez_curve[2] = (that_2 * dist) + bez_curve[3]
 
+        # Devuelve 3 puntos (?): el handle del punto inicial, el handle del punto final y el punto final.
         return bez_curve[1:]
 
     # Parametrize points, and attempt to fit curve
@@ -357,4 +364,4 @@ if __name__ == "__main__":
     from random import randint
     points = [Vector((randint(1, 10), randint(1, 10), randint(1, 10)))
               for _ in range(20)]
-    print(fit_curve(points, 0.01))
+    # print(fit_curve(points, 0.01))
