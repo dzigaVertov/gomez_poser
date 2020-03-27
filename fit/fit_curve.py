@@ -78,24 +78,23 @@ def b_0(u: float) -> float:
     """
     B0  Bezier multiplier
     """
-    tmp = 1 - u
-    return tmp*tmp*tmp
+
+    return (1-u)**3
 
 
 def b_1(u: float) -> float:
     """
     B1  Bezier multiplier
     """
-    tmp = 1-u
-    return 3*u*(tmp*tmp)
+    return 3*u*(1-u)**2
 
 
 def b_2(u: float) -> float:
     """
     B2 Bezier multiplier
+        
     """
-    tmp = 1-u
-    return 3*u*u*tmp
+    return 3*u**2*(1-u)
 
 
 def b_3(u: float) -> float:
@@ -146,11 +145,15 @@ def compute_max_error(points: List[Vector], first: int,
     return max_dist, split_point
 
 
-def generate_bezier(points: List[Vector], first: int, last: int, u_prime: List[float], that_1: Vector, that_2: Vector) -> List[Vector]:
+def generate_bezier(points: List[Vector], # puntos
+                    first: int,           # idx primer punto
+                    last: int,            # idx último punto
+                    parametro: List[float],  # parámetro
+                    that_1: Vector,        # tangente al primer punto
+                    that_2: Vector) -> List[Vector]:  # tangente al último punto
 
-    i: int
+
     a = np.ndarray([MAXPOINTS, 2], dtype=Vector)
-    n_pts: int
     C = Matrix([[0, 0], [0, 0]])
     X = Vector((0, 0))
     tmp: Vector
@@ -162,8 +165,8 @@ def generate_bezier(points: List[Vector], first: int, last: int, u_prime: List[f
     for i in range(n_pts):
         v_1 = that_1
         v_2 = that_2
-        v_1 *= b_1(u_prime[i])
-        v_2 *= b_2(u_prime[i])
+        v_1 *= b_1(parametro[i])
+        v_2 *= b_2(parametro[i])
         a[i][0] = v_1
         a[i][1] = v_2
 
@@ -176,12 +179,12 @@ def generate_bezier(points: List[Vector], first: int, last: int, u_prime: List[f
 
         tmp = (points[first + i] -
                (
-                   (points[first] * b_0(u_prime[i])) +
+                   (points[first] * b_0(parametro[i])) +
                    (
-                       (points[first] * b_1(u_prime[i])) +
+                       (points[first] * b_1(parametro[i])) +
                        (
-                           (points[last] * b_2(u_prime[i])) +
-                           (points[last] * b_3(u_prime[i]))))
+                           (points[last] * b_2(parametro[i])) +
+                           (points[last] * b_3(parametro[i]))))
         )
         )
 
@@ -215,7 +218,7 @@ def generate_bezier(points: List[Vector], first: int, last: int, u_prime: List[f
             return bez_curve
 
         # First and last control points of the Bezier curve are
-        # positioned exactly at the first and last data points
+        # positioned at the first and last data points
         # Control points 1 and 2 are positioned an alpha distance out
         # on the tangent vectors, left and right, respectively
         bez_curve[0] = points[first]
@@ -318,18 +321,18 @@ def fit_cubic(points, first, last, that_1, that_2, error):
         return bez_curve[1:]
 
     # Parametrize points, and attempt to fit curve
-    u = chord_length_parametrize(points, first, last)
+    param = chord_length_parametrize(points, first, last) # u: 0.0->1.0 en n_points
     bez_curve = generate_bezier(
-        points, first, last, u, that_1, that_2)
+        points, first, last, param, that_1, that_2)
 
     # Find max deviation of points to fitted curve
     max_error, split_point = compute_max_error(
-        points, first, last, bez_curve, u)
+        points, first, last, bez_curve, param)
 
     if max_error < iteration_error:
         for i in range(max_iterations):
             u_prime = reparametrize(
-                points, first, last, u, bez_curve)
+                points, first, last, param, bez_curve)
             bez_curve = generate_bezier(
                 points, first, last, u_prime, that_1, that_2)
             max_error, split_point = compute_max_error(
@@ -338,7 +341,7 @@ def fit_cubic(points, first, last, that_1, that_2, error):
             if max_error < error:
                 return bez_curve[1:]
 
-            u = u_prime
+            param = u_prime
 
     # Fitting failed -- split at max error point and fit recursively
     that_center = compute_center_tangent(points, split_point)
@@ -362,6 +365,6 @@ def fit_curve(points, error):
 
 if __name__ == "__main__":
     from random import randint
-    points = [Vector((randint(1, 10), randint(1, 10), randint(1, 10)))
+    puntos = [Vector((randint(1, 10), randint(1, 10), randint(1, 10)))
               for _ in range(20)]
     # print(fit_curve(points, 0.01))
