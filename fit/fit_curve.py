@@ -9,7 +9,7 @@ import numpy as np
 MAXPOINTS = 10000
 
 
-def compute_left_tangent(points: List[Vector], end: int) -> Vector:
+def compute_left_tangent(points: List[Vector], end: int = 0) -> Vector:
     """
     Approximate unit tangent at startpoint of digitized curve
     """
@@ -22,10 +22,13 @@ def compute_left_tangent(points: List[Vector], end: int) -> Vector:
     return that_1
 
 
-def compute_right_tangent(points: List[Vector], end: int) -> Vector:
+def compute_right_tangent(points: List[Vector], end: int = None) -> Vector:
     """
     Approximate unit tangents at endpoints of digitized curve
     """
+    if not end:
+        end = len(points) - 1
+
     that_2 = points[end - 1] - points[end]
     if that_2.length == 0:
         print('tangente nula')
@@ -42,9 +45,9 @@ def compute_center_tangent(points: List[Vector], center: int):
     v_1 = points[center - 1] - points[center]
     v_2 = points[center] - points[center+1]
 
-    that_center = Vector((0, 0, 0))
-    that_center.x = (v_1.x + v_2.x)/2
-    that_center.y = (v_1.y + v_2.y)/2
+    that_center = (v_1 + v_2)/2
+    # that_center.x = (v_1.x + v_2.x)/2
+    # that_center.y = (v_1.y + v_2.y)/2
     if that_center.length == 0.0:
         raise ZeroDivisionError
 
@@ -54,8 +57,8 @@ def compute_center_tangent(points: List[Vector], center: int):
 
 def bezier_ii(degree: int, ctrl_points: List[Vector], t: float):
     """
-    Bezier :
-    Evaluate a Bezier curve at a particular parameter value
+    Evaluate a Bezier curve of arbitrary degree
+    at a particular parameter value
     """
     j: int
     q: Vector
@@ -65,10 +68,11 @@ def bezier_ii(degree: int, ctrl_points: List[Vector], t: float):
     v_temp = [vec.copy() for vec in ctrl_points]
 
     # Triangle computation
-    for _ in range(1, degree+1):
-        for j in range(degree):
+    for i in range(1, degree+1):
+        for j in range(degree-i+1):
             v_temp[j].x = (1-t)*v_temp[j].x + t*v_temp[j+1].x
             v_temp[j].y = (1-t)*v_temp[j].y + t*v_temp[j+1].y
+            v_temp[j].z = (1-t)*v_temp[j].z + t*v_temp[j+1].z
 
     q = v_temp[0]
     return q
@@ -92,7 +96,7 @@ def b_1(u: float) -> float:
 def b_2(u: float) -> float:
     """
     B2 Bezier multiplier
-        
+
     """
     return 3*u**2*(1-u)
 
@@ -111,13 +115,14 @@ def chord_length_parametrize(points: List[Vector], first: int, last: int) -> Lis
     """
     n_pts = last - first + 1
 
-    curr_points = points[first:last+1]
+    curr_points = points[first:last+2]
     distances = [(curr_points[i+1] - curr_points[i]).length
-                       for i in range(n_pts-1)]
-    cum_distances = [sum(distances[:i]) for i in range(len(distances))]
+                 for i in range(n_pts-1)]
+    cum_distances = [sum(distances[:i]) for i in range(len(distances)+1)]
     dist_total = cum_distances[-1]
 
     u = [i/dist_total for i in cum_distances]
+   
     return u
 
 
@@ -134,9 +139,8 @@ def compute_max_error(points: List[Vector], first: int,
     max_dist = 0.0
     P: Vector
     for i in range(first+1, last):
-        P = bezier_ii(3, bez_curve, u[i-first])
-        v = P - points[i]
-        dist = v.length_squared
+        bezier_point = bezier_ii(3, bez_curve, u[i-first])
+        dist = (bezier_point - points[i]).length_squared
 
         if dist >= max_dist:
             max_dist = dist
@@ -145,31 +149,31 @@ def compute_max_error(points: List[Vector], first: int,
     return max_dist, split_point
 
 
-def generate_bezier(points: List[Vector], # puntos
+def generate_bezier(points: List[Vector],  # puntos
                     first: int,           # idx primer punto
                     last: int,            # idx último punto
                     parametro: List[float],  # parámetro
                     that_1: Vector,        # tangente al primer punto
                     that_2: Vector) -> List[Vector]:  # tangente al último punto
 
+    n_pts = last - first + 1
 
-    a = np.ndarray([MAXPOINTS, 2], dtype=Vector)
+    a = np.ndarray([n_pts, 2], dtype=Vector)
+
     C = Matrix([[0, 0], [0, 0]])
+
     X = Vector((0, 0))
     tmp: Vector
     bez_curve = [Vector((0, 0, 0)) for _ in range(4)]
 
-    n_pts = last - first + 1
 
     # Compute the A's
     for i in range(n_pts):
-        v_1 = that_1
-        v_2 = that_2
-        v_1 *= b_1(parametro[i])
-        v_2 *= b_2(parametro[i])
-        a[i][0] = v_1
-        a[i][1] = v_2
+        a[i][0] = that_1 * b_1(parametro[i])
+        a[i][1] = that_2 * b_2(parametro[i])
 
+    P_0 = points[first]
+    P_3 = points[last]
     # Create the C and X matrices
     for i in range(n_pts):
         C.row[0][0] += a[i][0].length_squared
@@ -179,12 +183,12 @@ def generate_bezier(points: List[Vector], # puntos
 
         tmp = (points[first + i] -
                (
-                   (points[first] * b_0(parametro[i])) +
+                   (P_0 * b_0(parametro[i])) +
                    (
-                       (points[first] * b_1(parametro[i])) +
+                       (P_0 * b_1(parametro[i])) +
                        (
-                           (points[last] * b_2(parametro[i])) +
-                           (points[last] * b_3(parametro[i]))))
+                           (P_3 * b_2(parametro[i])) +
+                           (P_3 * b_3(parametro[i]))))
         )
         )
 
@@ -192,7 +196,8 @@ def generate_bezier(points: List[Vector], # puntos
         X[1] += a[i, 1].dot(tmp)
 
         # Compute the determinants of C and X
-        det_C0_C1 = C.row[0][0] * C.row[1][1] - C.row[1][0]*C.row[0][1]
+        # C.row[0][0] * C.row[1][1] - C.row[1][0]*C.row[0][1]
+        det_C0_C1 = C.determinant()
         det_C0_X = C.row[0][0] * X[1] - C.row[1][0] * X[0]
         det_X_C1 = X[0] * C.row[1][1] - X[1] * C.row[0][1]
 
@@ -236,8 +241,8 @@ def newton_root_find(q: List[Vector], p: Vector, u: float) -> float:
 
     numerator: float
     denominator: float
-    q_1 = [Vector() for _ in range(3)]
-    q_2 = [Vector() for _ in range(2)]  # Q' and Q''
+    q_1 = [Vector((0, 0, 0)) for _ in range(3)]  # Q'
+    q_2 = [Vector((0, 0, 0)) for _ in range(2)]  # Q''
     q_u: Vector
     q1_u: Vector
     q2_u: Vector  # u evaluated at Q, Q', & Q''
@@ -251,20 +256,28 @@ def newton_root_find(q: List[Vector], p: Vector, u: float) -> float:
     for i in range(3):
         q_1[i].x = (q[i+1].x - q[i].x) * 3.0
         q_1[i].y = (q[i+1].y - q[i].y) * 3.0
+        q_1[i].z = (q[i+1].z - q[i].z) * 3.0
 
     # Generate control vertices for Q''
     for i in range(2):
         q_2[i].x = (q_1[i+1].x - q_1[i].x) * 2.0
         q_2[i].y = (q_1[i+1].y - q_1[i].y) * 2.0
+        q_2[i].z = (q_1[i+1].z - q_1[i].z) * 2.0
 
     # Compute Q'(u) and Q''(u)
     q1_u = bezier_ii(2, q_1, u)
     q2_u = bezier_ii(1, q_2, u)
 
     # Compute f(u)/f'(u)
-    numerator = (q_u.x - p.x) * (q1_u.x) + (q_u.y - p.y) * (q1_u.y)
-    denominator = (q1_u.x) * (q1_u.x) + (q1_u.y) * (q1_u.y) + \
-        (q_u.x - p.x) * (q2_u.x) + (q_u.y - p.y) * (q2_u.y)
+    numerator = (q_u.x - p.x) * (q1_u.x) + \
+        (q_u.y - p.y) * (q1_u.y) + \
+        (q_u.x - p.z) * (q1_u.z)
+    denominator = (q1_u.x) * (q1_u.x) + \
+        (q1_u.y) * (q1_u.y) + \
+        (q1_u.z) * (q1_u.z) + \
+        (q_u.x - p.x) * (q2_u.x) + \
+        (q_u.y - p.y) * (q2_u.y) + \
+        (q_u.z - p.z) * (q2_u.z)
     if denominator == 0.0:
         return u
 
@@ -286,6 +299,8 @@ def reparametrize(points: List[Vector], first: int, last: int, u: List[float], b
     for i in range(first, last+1):
         u_prime[i-first] = newton_root_find(
             bez_curve, points[i], u[i-first])
+
+    return u_prime
 
 
 def fit_cubic(points, first, last, that_1, that_2, error):
@@ -317,11 +332,12 @@ def fit_cubic(points, first, last, that_1, that_2, error):
         bez_curve[1] = (that_1 * dist) + bez_curve[0]
         bez_curve[2] = (that_2 * dist) + bez_curve[3]
 
-        # Devuelve 3 puntos (?): el handle del punto inicial, el handle del punto final y el punto final.
+        # Devuelve 3 puntos: el handle del punto inicial, el handle del punto final y el punto final.
         return bez_curve[1:]
 
     # Parametrize points, and attempt to fit curve
-    param = chord_length_parametrize(points, first, last) # u: 0.0->1.0 en n_points
+    param = chord_length_parametrize(
+        points, first, last)  # u: 0.0->1.0 en n_points
     bez_curve = generate_bezier(
         points, first, last, param, that_1, that_2)
 
@@ -345,26 +361,24 @@ def fit_cubic(points, first, last, that_1, that_2, error):
 
     # Fitting failed -- split at max error point and fit recursively
     that_center = compute_center_tangent(points, split_point)
-    result = fit_cubic(points, split_point, last,
+    result_left = fit_cubic(points, first, split_point, that_1, that_center, error)
+    that_center.negate()
+    result_right = fit_cubic(points, split_point, last,
                        that_center, that_2, error)
-
+    
+    result = result_left + result_right
     return result
 
 
 def fit_curve(points, error):
     # Unit tangent vector at endpoint
-    that_1 = compute_left_tangent(points, 0)
+    that_1 = compute_left_tangent(points)
     # Unit tangent vector at endpoint
-    that_2 = compute_right_tangent(points, len(points) - 1)
+    that_2 = compute_right_tangent(points)
 
     result = fit_cubic(
         points, 0, len(points) - 1, that_1, that_2, error)
 
-    return result
+    return [points[0]] + result
 
 
-if __name__ == "__main__":
-    from random import randint
-    puntos = [Vector((randint(1, 10), randint(1, 10), randint(1, 10)))
-              for _ in range(20)]
-    # print(fit_curve(points, 0.01))
