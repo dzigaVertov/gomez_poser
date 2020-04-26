@@ -60,6 +60,10 @@ def add_auxiliary_meshes():
 
 
 def change_context(ob, obtype='GPENCIL'):
+    """
+    Modificar el contexto para cambiar los pesos
+    de los vertex groups de grease pencil
+    """
     for area in C.screen.areas:
         if area.type == "VIEW_3D":
             break
@@ -82,6 +86,11 @@ def change_context(ob, obtype='GPENCIL'):
 
 
 def find_closest(distance, bones_positions, accumulated):
+    """
+    De la lista de distancias accumulated, devuelve el 
+    índice del elemento más cercano a distance.
+    TO DO: Hacer que esto sea un poco menos absurdo.
+    """
     closest = len(bones_positions)
     for i in range(len(bones_positions), len(accumulated)):
         if distance > accumulated[i]:
@@ -95,6 +104,10 @@ def find_closest(distance, bones_positions, accumulated):
 
 
 def get_stroke_length(stroke, start=0, end=None):
+    """
+    Calcula el largo total de un stroke entre dos puntos
+    y las distancias parciales entre cada punto y el primero
+    """
     if not end:
         end = len(stroke.points)
 
@@ -109,6 +122,11 @@ def get_stroke_length(stroke, start=0, end=None):
 
 
 def get_points_indices(stroke):
+    """
+    Devuelve los índices de los puntos que corresponden
+    a las posiciones de cada uno de los huesos. 
+    """
+    
     num_bones = bpy.context.window_manager.gopo_prop_group.num_bones
     stroke_length, accumulated = get_stroke_length(stroke)
     distance_btw_bones = stroke_length/num_bones
@@ -124,6 +142,10 @@ def get_points_indices(stroke):
 
 
 def get_bones_positions(stroke):
+    """
+    Devuelve las posiciones de los 
+    huesos a lo largo del stroke
+    """
     points_indices = get_points_indices(stroke)
 
     bones_positions = [stroke.points[idx].co for idx in points_indices]
@@ -131,12 +153,19 @@ def get_bones_positions(stroke):
 
 
 def add_deform_bones(armature, pos):
+    """
+    Creates deform bones - Puts bones in positions
+    Creates the hierarchy - Calculates roll
+    Puts Deform bones in last layer    
+    """
     armature.select_set(True)
     C.view_layer.objects.active = armature
     num_bones = C.window_manager.gopo_prop_group.num_bones
     num_bendy = C.window_manager.gopo_prop_group.num_bendy
+
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
     ed_bones = armature.data.edit_bones
+
     for i in range(num_bones):
         name = 'boney-' + str(i)
         ed_bones.new(name)
@@ -161,6 +190,10 @@ def add_deform_bones(armature, pos):
 
 
 def add_copy_location(armature, name, i):
+    """
+    Adds a copy location contraint to the i-th bone
+    targeting the "name" bone
+    """
     pbones = armature.pose.bones
 
     constr = pbones['boney-' + str(i)].constraints.new(type='COPY_LOCATION')
@@ -169,6 +202,10 @@ def add_copy_location(armature, name, i):
 
 
 def add_stretch_to(armature, name, i):
+    """
+    Adds a stretch-to contraint to the i-th bone
+    targeting the "name" bone
+    """
     pbones = armature.pose.bones
 
     constr = pbones['boney-' + str(i-1)].constraints.new(type='STRETCH_TO')
@@ -178,6 +215,11 @@ def add_stretch_to(armature, name, i):
 
 
 def add_control_bones(armature, pos):
+    """
+    Adds control bones in pos positions pointing up (for now) - 
+    Sets to no-deform - Adds copy location and stretch-to constraints
+    Adds custom shapes - Puts control bones in first layer.
+    """
     armature.select_set(True)
     C.view_layer.objects.active = armature
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
@@ -210,21 +252,30 @@ def add_control_bones(armature, pos):
 
 
 def add_armature(gp_ob, stroke, armature):
+    """
+    Adds an armature modifier to the greasepencil object
+    Adds a new vertex group containing the stroke
+    Sets the modifier to affect only that vertex group
+    """
     mod = gp_ob.grease_pencil_modifiers.new(type='GP_ARMATURE',
                                             name=armature.name)
-
     mod.object = armature
-    gp_ob.vertex_groups.new(name=armature.name)
+    
     C.view_layer.objects.active = gp_ob
     bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
-    con = change_context(gp_ob)
     for pt in stroke.points:
         pt.select = True
+        
+    con = change_context(gp_ob)
+    gp_ob.vertex_groups.new(name=armature.name)
     bpy.ops.gpencil.vertex_group_assign(con)
     mod.vertex_group = armature.name
 
 
 def get_vg_number(name):
+    """
+    Extracts the number in a bone name
+    """
     number = re.search('(\d*)$', name).group()
     if len(number):
         return int(number)
@@ -233,12 +284,21 @@ def get_vg_number(name):
 
 
 def add_vertex_groups(gp_ob, armature):
+    """
+    Add a vertex group for every deform bone
+    """
     for b in armature.data.bones:
         if b.use_deform:
             gp_ob.vertex_groups.new(name=b.name)
 
 
 def add_weights(gp_ob, stroke):
+    """
+    Asigna pesos a los puntos del stroke
+    TO DO: Cambiar la forma en que identifica a los grupos
+    por el nombre
+    """
+    
     idxs = get_points_indices(stroke)
     pts = stroke.points
 
@@ -267,6 +327,10 @@ def add_weights(gp_ob, stroke):
 
 
 def prepare_interface(armature):
+    """
+    Selecciona la armature, hace visible la capa de controles
+    Cambia el modo a POSE
+    """
     armature.select_set(True)
     armature.data.layers[0] = True
     armature.data.layers[-1] = False
@@ -274,7 +338,7 @@ def prepare_interface(armature):
     bpy.ops.object.mode_set(mode='POSE')
 
 
-def add_bones(armature, gp_ob):
+def fit_and_add_bones(armature, gp_ob):
     stroke = gp_ob.data.layers.active.active_frame.strokes[-1]
     initialized = C.window_manager.gopo_prop_group.initialized
     if not initialized:
@@ -311,7 +375,7 @@ class Gomez_OT_Poser(bpy.types.Operator):
         gp_ob = context.object
 
         ob_armature = context.window_manager.gopo_prop_group.ob_armature
-        add_bones(ob_armature, gp_ob)
+        fit_and_add_bones(ob_armature, gp_ob)
         return {'FINISHED'}
 
     @classmethod
