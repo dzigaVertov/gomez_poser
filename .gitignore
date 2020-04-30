@@ -8,3 +8,4 @@
 *.pyc
 fit_curve.cpython-37.pyc
 /fit/.ipynb_checkpoints/
+/fit/curve_to_bone.py~
