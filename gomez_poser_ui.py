@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import FloatProperty, IntProperty
+from bpy.props import FloatProperty, IntProperty, BoolProperty, PointerProperty, CollectionProperty
 import re
 import bpy
 from mathutils import Vector
@@ -15,19 +15,31 @@ D = bpy.data
 C = bpy.context
 
 
+class FittedHandle(bpy.types.PropertyGroup):
+    """
+    Grupo donde se guardan los datos de la curva fiteada. 
+    """
+    ctrl_point_1: bpy.props.FloatVectorProperty()
+    ctrl_point_2: bpy.props.FloatVectorProperty()
+    handle_1: bpy.props.FloatVectorProperty()
+    handle_2: bpy.props.FloatVectorProperty()
+    h_coef: bpy.props.FloatProperty()
+
+
 class GopoProperties(bpy.types.PropertyGroup):
     """
     Variables de configuración de Gomez Poser
     """
-
-    num_bones: bpy.props.IntProperty(name='gopo_num_bones', default=3, min=2)
-    num_bendy: bpy.props.IntProperty(
+    error_threshold: bpy.props.FloatProperty(default=0.05)
+    num_bones: IntProperty(name='gopo_num_bones', default=3, min=2)
+    num_bendy: IntProperty(
         name='gopo_num_bendy', default=16, min=1, max=32)
-    initialized: bpy.props.BoolProperty(name='initialized', default=False)
-    ob_armature: bpy.props.PointerProperty(type=bpy.types.Object, poll=lambda self, object: object.type == 'ARMATURE')
+    initialized: BoolProperty(name='initialized', default=False)
+    ob_armature: PointerProperty(type=bpy.types.Object, poll=lambda self, object: object.type == 'ARMATURE')
 
 
 bpy.utils.register_class(GopoProperties)
+bpy.utils.register_class(FittedHandle)
 
 
 def add_auxiliary_meshes():
@@ -126,7 +138,7 @@ def get_points_indices(stroke):
     Devuelve los índices de los puntos que corresponden
     a las posiciones de cada uno de los huesos. 
     """
-    
+
     num_bones = bpy.context.window_manager.gopo_prop_group.num_bones
     stroke_length, accumulated = get_stroke_length(stroke)
     distance_btw_bones = stroke_length/num_bones
@@ -146,9 +158,8 @@ def get_bones_positions(stroke):
     Devuelve las posiciones de los 
     huesos a lo largo del stroke
     """
-    points_indices = get_points_indices(stroke)
-
-    bones_positions = [stroke.points[idx].co for idx in points_indices]
+    h_coefs = C.window_manager.fitted_curve_coefs
+    bones_positions = [(i.ctrl_point1, i.ctrl_point1) for i in h_coefs]
     return bones_positions
 
 
@@ -166,17 +177,19 @@ def add_deform_bones(armature, pos):
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
     ed_bones = armature.data.edit_bones
 
-    for i in range(num_bones):
-        name = 'boney-' + str(i)
+    for i,pos in enumerate(pos):
+        head, tail = pos
+        name = 'boney_' + str(i)
         ed_bones.new(name)
-        ed_bones[name].head = pos[i]
-        ed_bones[name].tail = pos[i+1]
+
+        ed_bones[name].head = head
+        ed_bones[name].tail = tail
         ed_bones[name].bbone_segments = num_bendy
         ed_bones[name].use_deform = True
         ed_bones[name].roll = 0.0
 
         if i > 0:
-            ed_bones[name].parent = ed_bones['boney-' + str(i-1)]
+            ed_bones[name].parent = ed_bones['boney_' + str(i-1)]
             ed_bones[name].use_connect = True
             ed_bones[name].inherit_scale = 'NONE'
     bpy.ops.armature.select_all(action='SELECT')
@@ -188,6 +201,16 @@ def add_deform_bones(armature, pos):
             bone.layers[-1] = True
             bone.layers[0] = False
 
+def add_handles(armature, name, i):
+    """
+    Sets handle bones as bezier handles for the deform bone
+    """
+    bones = armature.bones
+    def_bone = bones['boney_' + str(i)]
+    def_bone.bbone_custom_handle_start = name + '_left_' + str(i)
+    def_bone.bbone_handle_type_start = 'ABSOLUTE'
+    def_bone.bbone_custom_handle_end = name + '_right_' + str(i)
+    def_bone.bbone_handle_type_end = 'ABSOLUTE'
 
 def add_copy_location(armature, name, i):
     """
@@ -196,7 +219,7 @@ def add_copy_location(armature, name, i):
     """
     pbones = armature.pose.bones
 
-    constr = pbones['boney-' + str(i)].constraints.new(type='COPY_LOCATION')
+    constr = pbones['boney_' + str(i)].constraints.new(type='COPY_LOCATION')
     constr.target = armature
     constr.subtarget = name
 
@@ -208,7 +231,7 @@ def add_stretch_to(armature, name, i):
     """
     pbones = armature.pose.bones
 
-    constr = pbones['boney-' + str(i-1)].constraints.new(type='STRETCH_TO')
+    constr = pbones['boney_' + str(i-1)].constraints.new(type='STRETCH_TO')
     constr.target = armature
     constr.subtarget = name
     constr.keep_axis = 'SWING_Y'
@@ -217,9 +240,13 @@ def add_stretch_to(armature, name, i):
 def add_control_bones(armature, pos):
     """
     Adds control bones in pos positions pointing up (for now) - 
+    Adds handle_bones
     Sets to no-deform - Adds copy location and stretch-to constraints
     Adds custom shapes - Puts control bones in first layer.
     """
+    h_coefs = C.window_manager.fitted_curve_coefs
+    handles = [(i.h_left, i.h_right) for i in h_coefs ]
+    
     armature.select_set(True)
     C.view_layer.objects.active = armature
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
@@ -227,10 +254,26 @@ def add_control_bones(armature, pos):
 
     for i, p in enumerate(pos):
         name = 'ctrl_stroke_' + str(i)
+        ctrl, _ = pos
         ed_bones.new(name)
-        ed_bones[name].head = pos[i]
-        ed_bones[name].tail = pos[i] + Vector((0.0, 0.0, 1.0))
+        ed_bones[name].head = ctrl
+        ed_bones[name].tail = ctrl + Vector((0.0, 0.0, 1.0))
         ed_bones[name].use_deform = False
+
+        
+    for i, h in handles:
+        h_left, h_right = h
+        name_left = 'handle_left_' + str(i)
+        name_right = 'handle_right_' + str(i)
+        ed_bones.new(name_left)
+        ed_bones.new(name_right)
+        ed_bones[name_left].head = h_left
+        ed_bones[name_right].head = h_right
+        ed_bones[name_left].tail = h_left + Vector((0.0, 0.0, 1.0))
+        ed_bones[name_left].use_deform = False
+        ed_bones[name_right].tail = h_right + Vector((0.0, 0.0, 1.0))
+        ed_bones[name_right].use_deform = False
+
 
     bpy.ops.object.mode_set(mode='OBJECT')
     for i, p in enumerate(pos):
@@ -241,6 +284,9 @@ def add_control_bones(armature, pos):
         if i > 0:
             add_stretch_to(armature, name, i)
 
+        # setting handles
+        add_handles(armature, 'handle', i)
+        
     pbones = armature.pose.bones
     for bone in pbones:
         if bone.name.startswith('ctrl'):
@@ -260,12 +306,12 @@ def add_armature(gp_ob, stroke, armature):
     mod = gp_ob.grease_pencil_modifiers.new(type='GP_ARMATURE',
                                             name=armature.name)
     mod.object = armature
-    
+
     C.view_layer.objects.active = gp_ob
     bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
     for pt in stroke.points:
         pt.select = True
-        
+
     con = change_context(gp_ob)
     gp_ob.vertex_groups.new(name=armature.name)
     bpy.ops.gpencil.vertex_group_assign(con)
@@ -298,7 +344,7 @@ def add_weights(gp_ob, stroke):
     TO DO: Cambiar la forma en que identifica a los grupos
     por el nombre
     """
-    
+
     idxs = get_points_indices(stroke)
     pts = stroke.points
 
@@ -340,9 +386,15 @@ def prepare_interface(armature):
 
 def fit_and_add_bones(armature, gp_ob):
     stroke = gp_ob.data.layers.active.active_frame.strokes[-1]
+    # TO DO: falta seleccionar el stroke
     initialized = C.window_manager.gopo_prop_group.initialized
     if not initialized:
         add_auxiliary_meshes()
+
+    # fit the curve
+    error = C.window_manager.gopo_prop_group.error_threshold
+    bpy.ops.gpencil.fit_curve(error=error, target='GPENCIL')
+
     pos = get_bones_positions(stroke)
 
     add_deform_bones(armature, pos)
@@ -370,12 +422,14 @@ class Gomez_OT_Poser(bpy.types.Operator):
 
     bpy.types.WindowManager.gopo_prop_group = bpy.props.PointerProperty(
         type=GopoProperties)
+    bpy.types.WindowManager.fitted_curve_coefs = CollectionProperty(type=FittedHandle, name='h_coefs')
 
     def execute(self, context):
         gp_ob = context.object
-
         ob_armature = context.window_manager.gopo_prop_group.ob_armature
+
         fit_and_add_bones(ob_armature, gp_ob)
+
         return {'FINISHED'}
 
     @classmethod
@@ -427,6 +481,7 @@ def register():
 
 
 def unregister():
+    bpy.utils.unregister_class(FittedHandle)
     bpy.utils.unregister_class(GopoProperties)
     bpy.utils.unregister_class(Gomez_OT_Poser)
     bpy.utils.unregister_class(GomezPTPanel)
