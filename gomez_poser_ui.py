@@ -19,10 +19,9 @@ class FittedHandle(bpy.types.PropertyGroup):
     """
     Grupo donde se guardan los datos de la curva fiteada. 
     """
-    ctrl_point_1: bpy.props.FloatVectorProperty()
-    ctrl_point_2: bpy.props.FloatVectorProperty()
-    handle_1: bpy.props.FloatVectorProperty()
-    handle_2: bpy.props.FloatVectorProperty()
+    handle_l: bpy.props.FloatVectorProperty()
+    ctrl_point: bpy.props.FloatVectorProperty()
+    handle_r: bpy.props.FloatVectorProperty()
     h_coef: bpy.props.FloatProperty()
 
 
@@ -35,7 +34,8 @@ class GopoProperties(bpy.types.PropertyGroup):
     num_bendy: IntProperty(
         name='gopo_num_bendy', default=16, min=1, max=32)
     initialized: BoolProperty(name='initialized', default=False)
-    ob_armature: PointerProperty(type=bpy.types.Object, poll=lambda self, object: object.type == 'ARMATURE')
+    ob_armature: PointerProperty(type=bpy.types.Object,
+                                 poll=lambda self, object: object.type == 'ARMATURE')
 
 
 bpy.utils.register_class(GopoProperties)
@@ -390,10 +390,11 @@ def fit_and_add_bones(armature, gp_ob):
     initialized = C.window_manager.gopo_prop_group.initialized
     if not initialized:
         add_auxiliary_meshes()
-
+    
+    C.view_layer.objects.active = gp_ob
     # fit the curve
     error = C.window_manager.gopo_prop_group.error_threshold
-    bpy.ops.gpencil.fit_curve(error=error, target='GPENCIL')
+    bpy.ops.gpencil.fit_curve(error_threshold=error, target='ARMATURE')
 
     pos = get_bones_positions(stroke)
 
