@@ -15,14 +15,15 @@ D = bpy.data
 C = bpy.context
 
 
-class FittedHandle(bpy.types.PropertyGroup):
+class FittedBone(bpy.types.PropertyGroup):
     """
     Grupo donde se guardan los datos de la curva fiteada. 
     """
     handle_l: bpy.props.FloatVectorProperty()
-    ctrl_point: bpy.props.FloatVectorProperty()
+    bone_head: bpy.props.FloatVectorProperty()
+    bone_tail: bpy.props.FloatVectorProperty()
     handle_r: bpy.props.FloatVectorProperty()
-    h_coef: bpy.props.FloatProperty()
+
 
 
 class GopoProperties(bpy.types.PropertyGroup):
@@ -39,7 +40,7 @@ class GopoProperties(bpy.types.PropertyGroup):
 
 
 bpy.utils.register_class(GopoProperties)
-bpy.utils.register_class(FittedHandle)
+bpy.utils.register_class(FittedBone)
 
 
 def add_auxiliary_meshes():
@@ -180,8 +181,8 @@ def get_bones_positions(stroke):
     Devuelve las posiciones de los 
     huesos a lo largo del stroke
     """
-    h_coefs = C.window_manager.fitted_curve_coefs
-    bones_positions = [(i.ctrl_point, j.ctrl_point) for i,j in zip(h_coefs[:-1],h_coefs[1:])]
+    h_coefs = C.window_manager.fitted_bones
+    bones_positions = [(i.bone_head, i.bone_tail) for i in h_coefs]
     return bones_positions
 
 
@@ -200,12 +201,10 @@ def add_deform_bones(armature, pos):
     ed_bones = armature.data.edit_bones
 
     for i,pos in enumerate(pos):
-        print('creating a boney bone')
         head, tail = pos
         name = 'boney_' + str(i)
-        print('bone_name: ', name)
+        
         ed_bones.new(name)
-
         ed_bones[name].head = head
         ed_bones[name].tail = tail
         ed_bones[name].bbone_segments = num_bendy
@@ -268,7 +267,7 @@ def add_control_bones(armature, pos):
     Sets to no-deform - Adds copy location and stretch-to constraints
     Adds custom shapes - Puts control bones in first layer.
     """
-    h_coefs = C.window_manager.fitted_curve_coefs
+    h_coefs = C.window_manager.fitted_bones
     handles = [(i.handle_l, i.handle_r) for i in h_coefs ]
     
     armature.select_set(True)
@@ -347,7 +346,7 @@ def add_armature(gp_ob, stroke, armature):
     gp_ob.vertex_groups.new(name=armature.name)
     bpy.ops.gpencil.vertex_group_assign(con)
     mod.vertex_group = armature.name
-
+    
 
 def get_vg_number(name):
     """
@@ -429,21 +428,15 @@ def fit_and_add_bones(armature, gp_ob):
     obarm = armature
     bones = obarm.data.bones
     
-    print(len(bones))
+
     pos = get_bones_positions(stroke)
-    print(len(bones))
     add_deform_bones(armature, pos)
-    print(len(bones))
     add_control_bones(armature, pos)
-    print(len(bones))
     add_armature(gp_ob, stroke, armature)
-    print(len(bones))
     add_vertex_groups(gp_ob, armature)
-    print(len(bones))
     add_weights(gp_ob, stroke)
-    print(len(bones))
     prepare_interface(armature)
-    print(len(bones))
+
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
@@ -457,7 +450,7 @@ class Gomez_OT_Poser(bpy.types.Operator):
 
     bpy.types.WindowManager.gopo_prop_group = bpy.props.PointerProperty(
         type=GopoProperties)
-    bpy.types.WindowManager.fitted_curve_coefs = CollectionProperty(type=FittedHandle, name='h_coefs')
+    bpy.types.WindowManager.fitted_bones = CollectionProperty(type=FittedBone, name='h_coefs')
 
     def execute(self, context):
         gp_ob = context.object
@@ -473,6 +466,8 @@ class Gomez_OT_Poser(bpy.types.Operator):
         es greaspencil? tiene layer activa? hay frame activo? hay strokes?
         hay armature seleccionada? 
         """
+        if not context.object:
+            return False
         if not context.object.type == 'GPENCIL':
             return False
         if not context.object.data.layers.active:
@@ -516,7 +511,7 @@ def register():
 
 
 def unregister():
-    bpy.utils.unregister_class(FittedHandle)
+    bpy.utils.unregister_class(FittedBone)
     bpy.utils.unregister_class(GopoProperties)
     bpy.utils.unregister_class(Gomez_OT_Poser)
     bpy.utils.unregister_class(GomezPTPanel)
