@@ -23,6 +23,7 @@ class FittedBone(bpy.types.PropertyGroup):
     bone_head: bpy.props.FloatVectorProperty()
     bone_tail: bpy.props.FloatVectorProperty()
     handle_r: bpy.props.FloatVectorProperty()
+    ease: bpy.props.FloatVectorProperty(size=2)
 
 
 
@@ -183,10 +184,11 @@ def get_bones_positions(stroke):
     """
     h_coefs = C.window_manager.fitted_bones
     bones_positions = [(i.bone_head, i.bone_tail) for i in h_coefs]
-    return bones_positions
+    ease = [(i.ease[0], i.ease[1]) for i in h_coefs ]
+    return bones_positions, ease
 
 
-def add_deform_bones(armature, pos):
+def add_deform_bones(armature, pos, ease):
     """
     Creates deform bones - Puts bones in positions
     Creates the hierarchy - Calculates roll
@@ -202,6 +204,7 @@ def add_deform_bones(armature, pos):
 
     for i,pos in enumerate(pos):
         head, tail = pos
+        ease_in, ease_out = ease[i]
         name = 'boney_' + str(i)
         
         ed_bones.new(name)
@@ -210,13 +213,15 @@ def add_deform_bones(armature, pos):
         ed_bones[name].bbone_segments = num_bendy
         ed_bones[name].use_deform = True
         ed_bones[name].roll = 0.0
+        ed_bones[name].bbone_easein = ease_in
+        ed_bones[name].bbone_easeout = ease_out
 
         if i > 0:
             ed_bones[name].parent = ed_bones['boney_' + str(i-1)]
             ed_bones[name].use_connect = True
             ed_bones[name].inherit_scale = 'NONE'
     bpy.ops.armature.select_all(action='SELECT')
-    bpy.ops.armature.calculate_roll(type='GLOBAL_POS_Y')
+    bpy.ops.armature.calculate_roll(type='GLOBAL_POS_Y', axis_only=True)
 
     bpy.ops.object.mode_set(mode='OBJECT')
     for bone in armature.data.bones:
@@ -277,11 +282,19 @@ def add_control_bones(armature, pos):
 
     for i, p in enumerate(pos):
         name = 'ctrl_stroke_' + str(i)
-        ctrl, _ = p
+        ctrl, tail = p
         ed_bones.new(name)
         ed_bones[name].head = Vector(ctrl)
         ed_bones[name].tail = Vector(ctrl) + Vector((0.0, 0.0, 1.0))
         ed_bones[name].use_deform = False
+
+        # The tail of the last bone gets a ctrl
+        if i == len(pos)-1:
+            name = 'ctrl_stroke_' + str(i+1)
+            ed_bones.new(name)
+            ed_bones[name].head = Vector(tail)
+            ed_bones[name].tail = Vector(tail) + Vector((0.0, 0.0, 1.0))
+            ed_bones[name].use_deform = False
 
         
     for i, h in enumerate(handles):
@@ -291,10 +304,10 @@ def add_control_bones(armature, pos):
         ed_bones.new(name_left)
         ed_bones.new(name_right)
         ed_bones[name_left].head = h_left
-        ed_bones[name_right].head = h_right
+        ed_bones[name_right].head = h_right - Vector((0.0, 0.0, 1.0));
         ed_bones[name_left].tail = h_left + Vector((0.0, 0.0, 1.0))
         ed_bones[name_left].use_deform = False
-        ed_bones[name_right].tail = h_right + Vector((0.0, 0.0, 1.0))
+        ed_bones[name_right].tail = h_right; 
         ed_bones[name_right].use_deform = False
 
 
@@ -302,10 +315,12 @@ def add_control_bones(armature, pos):
     for i, p in enumerate(pos):
         name = 'ctrl_stroke_' + str(i)
         # adding constraints
-        if i < len(pos)-1:
+        if i < len(pos):
             add_copy_location(armature, name, i)
         if i > 0:
             add_stretch_to(armature, name, i)
+        if i == len(pos) -1:
+            add_stretch_to(armature, 'ctrl_stroke_' + str(i+1), i+1)
 
         # setting handles
         add_handles(armature, 'handle', i)
@@ -429,8 +444,8 @@ def fit_and_add_bones(armature, gp_ob):
     bones = obarm.data.bones
     
 
-    pos = get_bones_positions(stroke)
-    add_deform_bones(armature, pos)
+    pos, ease = get_bones_positions(stroke)
+    add_deform_bones(armature, pos, ease)
     add_control_bones(armature, pos)
     add_armature(gp_ob, stroke, armature)
     add_vertex_groups(gp_ob, armature)
