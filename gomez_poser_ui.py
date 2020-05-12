@@ -2,7 +2,7 @@ import bpy
 from bpy.props import FloatProperty, IntProperty, BoolProperty, PointerProperty, CollectionProperty
 import re
 import bpy
-from mathutils import Vector
+from mathutils import Vector, Matrix
 import bmesh
 
 
@@ -24,6 +24,7 @@ class FittedBone(bpy.types.PropertyGroup):
     bone_tail: bpy.props.FloatVectorProperty()
     handle_r: bpy.props.FloatVectorProperty()
     ease: bpy.props.FloatVectorProperty(size=2)
+    vg_idx: bpy.props.IntVectorProperty(size=2)
 
 
 
@@ -88,6 +89,29 @@ def add_auxiliary_meshes():
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=False, cap_tris=True, segments= 8, diameter1=0.25, depth=0.25)
     bm.to_mesh(control_cone_mesh)
+    bm.free()
+
+    ctrl_cone_ob.display_type = 'WIRE'
+
+    # CONO DERECHA
+    # Crear objeto y mesh vacíos
+    control_cone_right_mesh = bpy.data.meshes.new('ctrl_cone_right')
+    ctrl_cone_right_ob = bpy.data.objects.new('ctrl_cone_right', control_cone_mesh)
+    # Linkear objeto a collection, hacer activo
+    aux_col.objects.link(ctrl_cone_right_ob)
+    ctrl_cone_right_ob.select_set(True)
+    C.view_layer.objects.active = ctrl_cone_right_ob
+
+    # Crear geometría
+    bm = bmesh.new()
+    # m = Matrix([[1,0,0,1],[0,1,0,0], [0,0,1,0], [0,0,0,1]])
+    bmesh.ops.create_cone(bm,
+                          cap_ends=False,
+                          cap_tris=True,
+                          segments= 8,
+                          diameter1=0.25,
+                          depth=0.25)
+    bm.to_mesh(control_cone_right_mesh)
     bm.free()
 
     ctrl_cone_ob.display_type = 'WIRE'
@@ -162,18 +186,8 @@ def get_points_indices(stroke):
     Devuelve los índices de los puntos que corresponden
     a las posiciones de cada uno de los huesos. 
     """
-
-    num_bones = bpy.context.window_manager.gopo_prop_group.num_bones
-    stroke_length, accumulated = get_stroke_length(stroke)
-    distance_btw_bones = stroke_length/num_bones
-
-    points_indices = []
-    for i in range(num_bones):
-        distance = i*distance_btw_bones
-        points_indices.append(find_closest(
-            distance, points_indices, accumulated))
-    points_indices.append(len(stroke.points)-1)
-
+    fb = C.window_manager.fitted_bones
+    points_indices = [i.vg_idx for i in fb]
     return points_indices
 
 
@@ -303,12 +317,17 @@ def add_control_bones(armature, pos):
         name_right = 'handle_right_' + str(i)
         ed_bones.new(name_left)
         ed_bones.new(name_right)
+
         ed_bones[name_left].head = h_left
-        ed_bones[name_right].head = h_right - Vector((0.0, 0.0, 1.0));
         ed_bones[name_left].tail = h_left + Vector((0.0, 0.0, 1.0))
         ed_bones[name_left].use_deform = False
-        ed_bones[name_right].tail = h_right; 
+        ed_bones[name_left].parent = ed_bones['ctrl_stroke_' + str(i)]
+
+
+        ed_bones[name_right].head = h_right
+        ed_bones[name_right].tail = h_right + Vector((0.0, 0.0, 1.0))
         ed_bones[name_right].use_deform = False
+        ed_bones[name_right].parent = ed_bones['ctrl_stroke_' + str(i+1)]
 
 
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -340,6 +359,8 @@ def add_control_bones(armature, pos):
             armature.data.bones[bone.name].show_wire = True
             armature.data.bones[bone.name].layers[0] = True
             armature.data.bones[bone.name].layers[-1] = False
+        if bone.name.startswith('handle_right'):
+            bone.custom_shape = D.objects['ctrl_cone_right']
 
 
 def add_armature(gp_ob, stroke, armature):
@@ -390,27 +411,28 @@ def add_weights(gp_ob, stroke):
     por el nombre
     """
 
-    idxs = get_points_indices(stroke)
+    indices = get_points_indices(stroke)
     pts = stroke.points
 
     C.view_layer.objects.active = gp_ob
     bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
     con = change_context(gp_ob)
 
-    for group in gp_ob.vertex_groups:
-        gp_ob.vertex_groups.active_index = group.index
-        # vamos a identificar el vertex_group por el numero al final
-        num_bone = get_vg_number(group.name)
-        if num_bone == 'NOBONE':
-            continue
+    def_vertex_groups = [group for group in gp_ob.vertex_groups if group.name.startswith('boney')]
 
-        max_pt_index = idxs[num_bone+1]
-        min_pt_index = idxs[num_bone]
-        for idx in range(len(pts)):
-            if min_pt_index <= idx <= max_pt_index:
-                pts[idx].select = True
+    print(len(def_vertex_groups))
+    print(indices)
+    for group, idx in zip(def_vertex_groups, indices):
+        
+        gp_ob.vertex_groups.active_index = group.index
+        min_pt_index, max_pt_index = idx
+        print(max_pt_index, min_pt_index)
+        
+        for point_idx in range(len(pts)):
+            if min_pt_index <= point_idx <= max_pt_index:
+                pts[point_idx].select = True
             else:
-                pts[idx].select = False
+                pts[point_idx].select = False
 
         bpy.ops.gpencil.vertex_group_assign(con)
     bpy.ops.object.mode_set(mode='OBJECT')
