@@ -354,12 +354,14 @@ def add_control_bones(armature, pos):
         edbone_left.tail = h_left + Vector((0.0, 0.0, 1.0))
         edbone_left.use_deform = False
         edbone_left.parent = ed_bones[bname(i, role='ctrl_stroke')]
+        edbone_left.inherit_scale = 'NONE'
         edbone.rigged_stroke = bone_groups
 
         edbone_right.head = h_right
         edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
         edbone_right.use_deform = False
         edbone_right.parent = ed_bones[bname(i+1, role='ctrl_stroke')]
+        edbone_right.inherit_scale = 'NONE'
         edbone_right.rigged_stroke = bone_groups
 
 
@@ -388,7 +390,6 @@ def add_control_bones(armature, pos):
         if bone.name.startswith('ctrl'):
             bone.custom_shape = bpy.data.objects['ctrl_sphere']
             bone.custom_shape_scale = 0.1
-            armature.data.bones[bone.name].show_wire = True
             armature.data.bones[bone.name].layers[0] = True
             armature.data.bones[bone.name].layers[-1] = False
             
@@ -475,8 +476,8 @@ def add_weights(gp_ob, stroke):
     for point in pts:
         point.select = False
         
-    bpy.ops.object.mode_set(mode='OBJECT')
-    gp_ob.select_set(False)
+    bpy.ops.object.mode_set(mode='PAINT_GPENCIL')
+    
 
 
 def prepare_interface(armature):
@@ -485,12 +486,8 @@ def prepare_interface(armature):
     Cambia el modo a POSE
     Limpia la información de la curva fiteada
     """
-    armature.select_set(True)
-    armature.data.layers[0] = True
-    armature.data.layers[-1] = False
-    bpy.context.view_layer.objects.active = armature
-    bpy.ops.object.mode_set(mode='POSE')
-    bpy.context.window_manager.fitted_bones.clear() 
+    bpy.context.window_manager.fitted_bones.clear()
+    bpy.ops.greasepencil.go_pose()
 
 
 def fit_and_add_bones(armature, gp_ob, context):
@@ -529,15 +526,37 @@ def fit_and_add_bones(armature, gp_ob, context):
 # ----------------------------------------------------------------------
 def set_control_visibility(context, event):
     mo = Vector((event.mouse_region_x, event.mouse_region_y))
-    bones = context.object.data.bones
     pbones = context.object.pose.bones
-    for bone, pbone in zip(bones, pbones):
-        if bone.name.startswith('ctrl') and (mo-location_3d_to_region_2d(context.region, context.space_data.region_3d, pbone.head)).length < 200:
-            bone.layers[0] = True
-            bone.layers[3] = False
+    width = context.region.width
+    for pbone in  pbones:
+        pos_bone = location_3d_to_region_2d(context.region, context.space_data.region_3d, pbone.head)
+        ctrl_bone = pbone.name.startswith('ctrl')
+        handle_bone = pbone.name.startswith('handle')
+        dist_cond = (mo-pos_bone).length < width/6
+        sel_cond = pbone.bone.select 
+        if not (ctrl_bone or handle_bone):
+            pbone.bone.layers[0] = False
+            pbone.bone.layers[3] = True
         else:
-            bone.layers[0] = False
-            bone.layers[3] = True
+            if ctrl_bone and dist_cond:
+                pbone.bone.layers[0] = True
+                pbone.bone.layers[3] = False
+            elif not handle_bone:
+                pbone.bone.layers[0]=False
+                pbone.bone.layers[3]= True
+            if sel_cond:
+                pbone.bone.layers[0] = True
+                pbone.bone.layers[3] = False
+                for ch in pbone.children:
+                    ch.bone.layers[0] = True
+                    ch.bone.layers[3] = False
+            else:
+                for ch in pbone.children:
+                    ch.bone.layers[0] = False
+                    ch.bone.layers[3] = True
+                
+                
+            
  
     
 class GOMEZ_OT_go_pose(bpy.types.Operator):
@@ -550,11 +569,16 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.shift and event.type == 'O':
+            bpy.ops.armature.go_draw()
             return {'FINISHED'}
         set_control_visibility(context, event)
+
         return {'PASS_THROUGH'}
     
     def invoke(self, context, event):
+        return self.execute(context)
+
+    def execute(self, context):
         bpy.ops.object.mode_set(mode='OBJECT')
         armature = context.window_manager.gopo_prop_group.ob_armature
         armature.hide_viewport = False
@@ -567,6 +591,7 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
         
         return {'RUNNING_MODAL'}
 
+    
     @classmethod
     def poll(cls, context):
         armature = context.window_manager.gopo_prop_group.ob_armature
