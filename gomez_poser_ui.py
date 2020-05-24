@@ -1,23 +1,18 @@
 import bpy
 from bpy.props import FloatProperty
 from bpy.props import IntProperty
-from bpy.props import BoolProperty, PointerProperty, CollectionProperty, StringProperty
+from bpy.props import FloatVectorProperty
+from bpy.props import BoolProperty,PointerProperty, CollectionProperty, StringProperty
 import re
 from mathutils import Vector, Matrix
 import bmesh
 from . import gp_armature_applier
+from bpy_extras.view3d_utils import location_3d_to_region_2d
 
 
 # KEYMAP HANDLING
 addon_keymaps = []
 
-class BoneGroups(bpy.types.PropertyGroup):
-    """
-    Id of bones linked to rigged grease pencil stroke
-    """
-    idx : bpy.props.IntProperty(name='id', default=-1)
-
-    
 class FittedBone(bpy.types.PropertyGroup):
     """
     Grupo donde se guardan los datos de la curva fiteada. 
@@ -35,10 +30,11 @@ class GopoProperties(bpy.types.PropertyGroup):
     """
     Variables de configuración de Gomez Poser
     """
+    
     error_threshold: FloatProperty(default=0.01)
     num_bones: IntProperty(name='gopo_num_bones',
                            default=3,
-                           min=2)
+                           min=0)
     num_bendy: IntProperty(name='gopo_num_bendy',
                            default=32,
                            min=1,
@@ -59,7 +55,7 @@ class GopoProperties(bpy.types.PropertyGroup):
                        max=1000000)
 
     
-def add_driver(source, target, prop, func = '', transform_type=None, source_bone=None):
+def add_driver(source, target, prop, func = str, transform_type=None, source_bone=None, var_type='TRANSFORMS'):
     ''' Add driver to source prop (at index), driven by target dataPath '''
 
     driver = source.driver_add( prop ).driver
@@ -240,7 +236,7 @@ def add_deform_bones(armature, pos, ease):
     armature.select_set(True)
     armature.hide_viewport = False
     bpy.context.view_layer.objects.active = armature
-    bone_groups = bpy.context.window_manager.gopo_prop_group.current_bone_group
+    bone_group_id = bpy.context.window_manager.gopo_prop_group.current_bone_group
     num_bendy = bpy.context.window_manager.gopo_prop_group.num_bendy
 
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
@@ -259,7 +255,7 @@ def add_deform_bones(armature, pos, ease):
         edbone.roll = 0.0
         edbone.bbone_easein = ease_in
         edbone.bbone_easeout = ease_out
-        armature.data.bones[edbone.name].rigged_stroke = bone_groups
+        edbone.rigged_stroke = bone_group_id
 
         if i > 0:
             edbone.parent = ed_bones[bname(i-1)]
@@ -325,7 +321,7 @@ def add_control_bones(armature, pos):
     bpy.context.view_layer.objects.active = armature
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
     ed_bones = armature.data.edit_bones
-    bone_groups = bpy.context.window_manager.gopo_prop_group.bone_groups
+    bone_groups = bpy.context.window_manager.gopo_prop_group.current_bone_group
     
     # add the knots
     for i, p in enumerate(pos):
@@ -335,7 +331,7 @@ def add_control_bones(armature, pos):
         edbone.head = Vector(ctrl)
         edbone.tail = Vector(ctrl) + Vector((0.0, 0.0, 1.0))
         edbone.use_deform = False
-        armature.data.bones[edbone.name].rigged_stroke = bone_groups
+        edbone.rigged_stroke = bone_groups
 
         # The tail of the last bone gets a knot
         if i == len(pos)-1:
@@ -344,7 +340,7 @@ def add_control_bones(armature, pos):
             edbone.head = Vector(tail)
             edbone.tail = Vector(tail) + Vector((0.0, 0.0, 1.0))
             edbone.use_deform = False
-            armature.data.bones[edbone.name].rigged_stroke = bone_groups
+            edbone.rigged_stroke = bone_groups
 
         
     for i, h in enumerate(handles):
@@ -358,18 +354,20 @@ def add_control_bones(armature, pos):
         edbone_left.tail = h_left + Vector((0.0, 0.0, 1.0))
         edbone_left.use_deform = False
         edbone_left.parent = ed_bones[bname(i, role='ctrl_stroke')]
-        armature.data.bones[edbone_left.name].rigged_stroke = bone_groups
+        edbone.rigged_stroke = bone_groups
 
         edbone_right.head = h_right
         edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
         edbone_right.use_deform = False
         edbone_right.parent = ed_bones[bname(i+1, role='ctrl_stroke')]
-        armature.data.bones[edbone_right.name].rigged_stroke = bone_groups
+        edbone_right.rigged_stroke = bone_groups
 
 
     bpy.ops.object.mode_set(mode='OBJECT')
     for i, p in enumerate(pos):
         name = bname(i, role='ctrl_stroke')
+        bone = armature.data.bones[name]
+        
         # adding constraints
         if i < len(pos):
             add_copy_location(armature, name, i)
@@ -502,15 +500,14 @@ def fit_and_add_bones(armature, gp_ob, context):
     stroke_index = get_stroke_index(gp_ob)
     stroke = gp_ob.data.layers.active.active_frame.strokes[stroke_index]
     
-    bone_group = stroke.bone_groups.add()
-    bone_group.idx = group_id
+    stroke.bone_groups = group_id
 
     # TODO move this away from here
     initialized = context.window_manager.gopo_prop_group.initialized
     if not initialized:
         add_auxiliary_meshes()
     
-    # context.view_layer.objects.active = gp_ob
+    context.view_layer.objects.active = gp_ob
     # fit the curve
     error = context.window_manager.gopo_prop_group.error_threshold
     bpy.ops.gpencil.fit_curve(error_threshold=error,
@@ -530,6 +527,19 @@ def fit_and_add_bones(armature, gp_ob, context):
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
+def set_control_visibility(context, event):
+    mo = Vector((event.mouse_region_x, event.mouse_region_y))
+    bones = context.object.data.bones
+    pbones = context.object.pose.bones
+    for bone, pbone in zip(bones, pbones):
+        if bone.name.startswith('ctrl') and (mo-location_3d_to_region_2d(context.region, context.space_data.region_3d, pbone.head)).length < 200:
+            bone.layers[0] = True
+            bone.layers[3] = False
+        else:
+            bone.layers[0] = False
+            bone.layers[3] = True
+ 
+    
 class GOMEZ_OT_go_pose(bpy.types.Operator):
     """
     Go from draw mode of the gp_ob  to pose mode of the armature
@@ -538,10 +548,13 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
     bl_label = "Gposer go_pose"
     bl_options = {'REGISTER', 'UNDO'}
 
+    def modal(self, context, event):
+        if event.shift and event.type == 'O':
+            return {'FINISHED'}
+        set_control_visibility(context, event)
+        return {'PASS_THROUGH'}
+    
     def invoke(self, context, event):
-        return self.execute(context)
-        
-    def execute(self, context):
         bpy.ops.object.mode_set(mode='OBJECT')
         armature = context.window_manager.gopo_prop_group.ob_armature
         armature.hide_viewport = False
@@ -550,7 +563,9 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
         context.view_layer.objects.active.select_set(False)
         context.view_layer.objects.active = armature
         bpy.ops.object.mode_set(mode='POSE')
-        return {'FINISHED'}
+        context.window_manager.modal_handler_add(self)
+        
+        return {'RUNNING_MODAL'}
 
     @classmethod
     def poll(cls, context):
@@ -559,7 +574,10 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
             return True
         else:
             return False
-            
+
+# ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# ----------------------------------------------------------------------        
         
 class GOMEZ_OT_go_draw(bpy.types.Operator):
     """
@@ -598,7 +616,7 @@ class Gomez_OT_Poser(bpy.types.Operator):
     Rig a grease pencil stroke
     """
     bl_idname = "greasepencil.poser"
-    bl_label = "Gposer Op"
+    bl_label = "Rig Stroke"
     bl_options = {'REGISTER', 'UNDO'}
 
     def invoke(self, context, event):
@@ -617,7 +635,6 @@ class Gomez_OT_Poser(bpy.types.Operator):
         gp_ob = context.object
         ob_armature = context.window_manager.gopo_prop_group.ob_armature
         
-
         fit_and_add_bones(ob_armature, gp_ob, context)
 
         return {'FINISHED'}
@@ -668,11 +685,19 @@ class GomezPTPanel(bpy.types.Panel):
         layout.row().prop(context.window_manager.gopo_prop_group, 'num_bendy')
         layout.row().prop(context.window_manager.gopo_prop_group,
                           'ob_armature', icon='OUTLINER_OB_ARMATURE', text='Armature')
+        layout.row().prop(context.window_manager.gopo_prop_group, 'gp_ob', icon='OUTLINER_OB_GREASEPENCIL',text='gpencil')
         what = layout.row().operator("greasepencil.poser")
+
+        layout.column()
+        
+        layout.row().prop(context.window_manager.gopo_prop_group, 'frame_init')
+        layout.row().prop(context.window_manager.gopo_prop_group, 'frame_end')
+        layout.row().prop(context.window_manager.gopo_prop_group, 'bake_step')
+        layout.row().operator("greasepencil.gp_bake_animation")
+        
 
 
 def register():
-    bpy.utils.register_class(BoneGroups)
     bpy.utils.register_class(GopoProperties)
     bpy.utils.register_class(FittedBone)
     bpy.utils.register_class(Gomez_OT_Poser)
@@ -680,16 +705,18 @@ def register():
     bpy.utils.register_class(GOMEZ_OT_go_draw)
     bpy.utils.register_class(GOMEZ_OT_go_pose)
 
+    
     bpy.types.WindowManager.gopo_prop_group = PointerProperty(type=GopoProperties)
     bpy.types.WindowManager.fitted_bones = CollectionProperty(type=FittedBone,
                                                               name='h_coefs')
-    bpy.types.GPencilStroke.bone_groups = bpy.props.CollectionProperty(type=BoneGroups)
     bpy.types.Bone.rigged_stroke = IntProperty(name='stroke_id',
                                              description='id of linked stroke',
-                                             default=-1)
-    bpy.types.Bone.bone_groups = bpy.props.CollectionProperty(type=BoneGroups)
-
-
+                                               default=0)
+    bpy.types.EditBone.rigged_stroke = IntProperty(name='stroke_id',
+                                             description='id of linked stroke',
+                                               default=0)
+    
+    
     wm = bpy.context.window_manager
     kc = wm.keyconfigs.addon
     if kc:
@@ -705,7 +732,6 @@ def register():
 
 
 def unregister():
-    bpy.utils.unregister_class(BoneGroups)
     bpy.utils.unregister_class(FittedBone)
     bpy.utils.unregister_class(GopoProperties)
     bpy.utils.unregister_class(Gomez_OT_Poser)
@@ -715,8 +741,8 @@ def unregister():
         
     del bpy.types.WindowManager.gopo_prop_group
     del bpy.types.WindowManager.fitted_bones
-    del bpy.types.GPencilStroke.bone_groups
     del bpy.types.Bone.rigged_stroke
+    del bpy.types.EditBone.rigged_stroke
 
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)

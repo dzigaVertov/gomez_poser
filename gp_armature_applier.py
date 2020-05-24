@@ -17,14 +17,85 @@ def get_target_strokes(context):
 
     return [idx for idx,stroke in enumerate(all_strokes) if stroke.select]
 
+def clean_strokes(context, group_id):
+    """
+    Set all strokes from bonegroup group_id to no group
+    """
+    prop_group = context.window_manager.gopo_prop_group
+    gp_ob = prop_group.gp_ob
 
+    for layer in gp_ob.data.layers:
+        for frame in layer.frames:
+            for stroke in frame.strokes:
+                if stroke.bone_groups == group_id:
+                    stroke.bone_groups = 0
+
+def clean_gp_object(context, group_id):
+    """
+    Remove all deform and armature vertex groups pertaining the group_id bone group.
+    Remove the corresponding armature modifier.
+    """
+    prop_group = context.window_manager.gopo_prop_group
+    gp_ob = prop_group.gp_ob
+
+    for vgroup in gp_ob.vertex_groups:
+        if vgroup.name.startswith('deform_' + str(group_id)):
+            gp_ob.vertex_groups.remove(vgroup)
+        elif vgroup.name.startswith('Armature' + str(group_id)):
+            for mod in gp_ob.grease_pencil_modifiers:
+                if mod.vertex_group == vgroup:
+                    gp_ob.greasepencil_modifiers.remove(mod)
+                    gp_ob.vertex_groups.remove(vgroup)
+        
+
+def clean_bones(context,group_id):
+    armature = context.window_manager.gopo_prop_group.ob_armature
+    act_ob = context.object
+    curr_mode = context.mode
+
+    bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+    context.view_layer.objects.active = armature
+    armature.hide_viewport = False
+    bpy.ops.object.mode_set(mode='EDIT')
+
+    for edbone in armature.data.edit_bones:
+        if edbone.rigged_stroke == group_id:
+            armature.data.edit_bones.remove(edbone)
+
+    bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+    context.view_layer.objects.active = act_ob
+    bpy.ops.object.mode_set(mode=curr_mode)
+    
+                    
+
+class GOMEZ_OT_clean_baked(bpy.types.Operator):
+    """
+    Cleans vertex groups and bones from baked strokes
+    """
+    bl_idname = "greasepencil.gp_clean_baked"
+    bl_label = "Clean baked stroke"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    group_id : IntProperty(name='bgroup', default=1)
+
+    def execute(self, context):
+        if not self.group_id:
+            return {'CANCELLED'}
+
+        clean_strokes(context, self.group_id)
+        clean_gp_object(context, self.group_id)
+        clean_bones(context, self.group_id)
+
+        return {'FINISHED'}
+
+    
 class GOMEZ_OT_bake_animation(bpy.types.Operator):
     """
     Bake a gpencil-armature modifier animation for a range of frames.
     It bakes the data to the same layer or to a new layer
     """
     bl_idname = "greasepencil.gp_bake_animation"
-    bl_label = "Gposer op"
+    bl_label = "Bake to keys"
     bl_options = {'REGISTER', 'UNDO'}
 
     frame_init : IntProperty(name='start frame',
@@ -107,7 +178,7 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
 
         return False
         
-class GOMEZ_OT_clean_stroke(bpy.types.Operator):
+class GOMEZ_OT_clean_strokes(bpy.types.Operator):
     bl_idname = 'greasepencil.clean_stroke'
     bl_label = 'Remove vertex group, armature modifier and bones'
     bl_options = {'REGISTER', 'UNDO'}
@@ -129,10 +200,11 @@ class GOMEZ_OT_clean_stroke(bpy.types.Operator):
             
 def register():
     bpy.utils.register_class(GOMEZ_OT_bake_animation)
+    bpy.utils.register_class(GOMEZ_OT_clean_baked)
 
 def unregister():
     bpy.utils.unregister_class(GOMEZ_OT_bake_animation)
-
+    bpy.utils.unregister_class(GOMEZ_OT_clean_baked)
 
         
     
