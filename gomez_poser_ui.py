@@ -330,7 +330,7 @@ def add_stretch_to(armature, subtarget, i):
     constr.keep_axis = 'SWING_Y'
 
 
-def add_control_bones(armature, pos):
+def add_control_bones(armature, pos, threshold):
     """
     Adds control and handle bones in pos positions pointing up (for now) - 
 
@@ -365,6 +365,11 @@ def add_control_bones(armature, pos):
             edbone.tail = Vector(tail) + Vector((0.0, 0.0, 1.0))
             edbone.use_deform = False
             edbone.rigged_stroke = bone_groups
+            # check if it's closed_stroke
+            first_control, _ = pos[0]
+            if (Vector(tail) - Vector(first_control)).length < threshold:
+                edbone.parent = ed_bones[bname(0,role='ctrl_stroke')]
+                
 
         
     for i, h in enumerate(handles):
@@ -415,6 +420,9 @@ def add_control_bones(armature, pos):
             bone.custom_shape_scale = 0.1
             armature.data.bones[bone.name].layers[0] = True
             armature.data.bones[bone.name].layers[-1] = False
+            # TODO FIX this if bone has parent, hide it
+            if bone.parent:
+                bone.bone.hide = True
             
 
         if bone.name.startswith('handle'):
@@ -513,7 +521,7 @@ def prepare_interface(armature):
     bpy.ops.greasepencil.go_pose()
 
 
-def fit_and_add_bones(armature, gp_ob, context):
+def fit_and_add_bones(armature, gp_ob, context, threshold):
 
     # Get and initialize stroke to be rigged
     group_id = context.window_manager.gopo_prop_group.current_bone_group
@@ -538,7 +546,7 @@ def fit_and_add_bones(armature, gp_ob, context):
     # store the length of the chain for rigging purposes
     bpy.context.window_manager.gopo_prop_group.num_bones = len(pos)
     add_deform_bones(armature, pos, ease)
-    add_control_bones(armature, pos)
+    add_control_bones(armature, pos, threshold)
     add_armature(gp_ob, stroke, armature)
     add_vertex_groups(gp_ob, armature)
     add_weights(gp_ob, stroke)
@@ -606,6 +614,7 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
         armature = context.window_manager.gopo_prop_group.ob_armature
         armature.hide_viewport = False
         armature.select_set(True)
+        context.space_data.overlay.show_relationship_lines = False
         # deselect the gp object
         context.view_layer.objects.active.select_set(False)
         context.view_layer.objects.active = armature
@@ -667,6 +676,8 @@ class Gomez_OT_Poser(bpy.types.Operator):
     bl_label = "Rig Stroke"
     bl_options = {'REGISTER', 'UNDO'}
 
+    closed_stroke_threshold : FloatProperty(name='closed_stroke_threshold', default=0.03)
+
     def invoke(self, context, event):
         if context.object.type == 'GPENCIL':
             context.window_manager.gopo_prop_group.current_bone_group +=1
@@ -683,7 +694,7 @@ class Gomez_OT_Poser(bpy.types.Operator):
         gp_ob = context.object
         ob_armature = context.window_manager.gopo_prop_group.ob_armature
         
-        fit_and_add_bones(ob_armature, gp_ob, context)
+        fit_and_add_bones(ob_armature, gp_ob, context, self.closed_stroke_threshold)
 
         return {'FINISHED'}
 
@@ -772,10 +783,11 @@ def register():
         kmi = km.keymap_items.new('greasepencil.poser', type='P', value='PRESS', shift=True)
         kmj = km.keymap_items.new('armature.go_draw', type='O', value='PRESS', shift = True)
         kml = km.keymap_items.new('greasepencil.go_pose', type='L',value='PRESS', shift=True)
+        kmll = km.keymap_items.new('armature.select_all_ctrls', type='L', value='PRESS',shift=True, ctrl=True)
         addon_keymaps.append((km, kmi))
         addon_keymaps.append((km, kmj))
         addon_keymaps.append((km, kml))
-
+        addon_keymaps.append((km, kmll))
 
 
 

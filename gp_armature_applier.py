@@ -43,8 +43,8 @@ def clean_gp_object(context, group_id):
             gp_ob.vertex_groups.remove(vgroup)
         elif vgroup.name.startswith('Armature' + str(group_id)):
             for mod in gp_ob.grease_pencil_modifiers:
-                if mod.vertex_group == vgroup:
-                    gp_ob.greasepencil_modifiers.remove(mod)
+                if mod.vertex_group == vgroup.name:
+                    gp_ob.grease_pencil_modifiers.remove(mod)
                     gp_ob.vertex_groups.remove(vgroup)
         
 
@@ -88,6 +88,8 @@ class GOMEZ_OT_clean_baked(bpy.types.Operator):
 
         return {'FINISHED'}
 
+
+    
     
 class GOMEZ_OT_bake_animation(bpy.types.Operator):
     """
@@ -193,7 +195,29 @@ class GOMEZ_OT_clean_strokes(bpy.types.Operator):
             pass
         
             
-            
+
+class GOMEZ_OT_select_all_stroke_ctrls(bpy.types.Operator):
+    bl_idname = 'armature.select_all_ctrls'
+    bl_label = 'Select all controls of a given stroke'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        armature = context.object
+        indices = [bone.rigged_stroke for bone in armature.data.bones if bone.select]
+
+        for bone in armature.data.bones:
+            if bone.name.startswith('ctrl') and bone.rigged_stroke in indices:
+                bone.select = True
+        return {'FINISHED'}
+
+    
+    @classmethod
+    def poll(cls, context):
+        armature = context.window_manager.gopo_prop_group.ob_armature
+        return armature and context.mode == 'POSE' 
+        
+
+        
 
         
 
@@ -201,10 +225,12 @@ class GOMEZ_OT_clean_strokes(bpy.types.Operator):
 def register():
     bpy.utils.register_class(GOMEZ_OT_bake_animation)
     bpy.utils.register_class(GOMEZ_OT_clean_baked)
+    bpy.utils.register_class(GOMEZ_OT_select_all_stroke_ctrls)
 
 def unregister():
     bpy.utils.unregister_class(GOMEZ_OT_bake_animation)
     bpy.utils.unregister_class(GOMEZ_OT_clean_baked)
+    bpy.utils.unregister_class(GOMEZ_OT_select_all_stroke_ctrls)
 
         
     
