@@ -55,21 +55,56 @@ class GopoProperties(bpy.types.PropertyGroup):
                        max=1000000)
 
     
-def add_driver(source, target, prop, func = str, transform_type=None, source_bone=None, var_type='TRANSFORMS'):
-    ''' Add driver to source prop (at index), driven by target dataPath '''
+def add_driver(i, def_bone, handle_left, handle_right):
+    ''' Add drivers to ease properties of deform bone '''
+    bone_groups = bpy.context.window_manager.gopo_prop_group.current_bone_group
+    num_bones = bpy.context.window_manager.gopo_prop_group.num_bones
+    armature = bpy.context.window_manager.gopo_prop_group.ob_armature
 
-    driver = source.driver_add( prop ).driver
+    
+    # distances in editmode
+    edit_distance_handle_left = (handle_left.head - def_bone.head).length
+    edit_distance_handle_right = (handle_right.head - def_bone.tail).length
+    
+        
+    
+    # ease out
+    deform_name = def_bone.name
+    ctrl_bone = armature.pose.bones[bname(i+1,role='ctrl_stroke')]
+    path_ease_out = f'pose.bones[\"{deform_name}\"].bbone_easeout'
+    edit_easeout = armature.data.bones[deform_name].bbone_easeout
+    
+        
+    # ease in
+    path_ease_in = f'pose.bones[\"{deform_name}\"].bbone_easein'
+    edit_easein = armature.data.bones[deform_name].bbone_easein
 
+    # add driver easein
+    driver = armature.driver_add( path_ease_in ).driver
     variable = driver.variables.new()
-    variable.type = 'TRANSFORMS'
+    variable.type = 'LOC_DIFF'
     variable.name                 = 'varname'
-    variable.targets[0].id        = target
-    if source_bone:
-        variable.targets[0].bone_target = source_bone
-    if transform_type:
-        variable.targets[0].transform_type = transform_type
+    variable.targets[0].id        = armature
+    variable.targets[0].bone_target = def_bone.name
+    variable.targets[1].id        = armature
+    variable.targets[1].bone_target = handle_left.name
+    
+    driver.expression = f'(varname-{edit_distance_handle_left})*{edit_easein}/{edit_distance_handle_left} '
 
-    driver.expression = func(variable.name) 
+    # add driver easeout
+    # we need the control bone for this one
+    
+    driver = armature.driver_add( path_ease_out ).driver
+    variable = driver.variables.new()
+    variable.type = 'LOC_DIFF'
+    variable.name                 = 'varname'
+    variable.targets[0].id        = armature
+    variable.targets[0].bone_target = ctrl_bone.name
+    variable.targets[1].id        = armature
+    variable.targets[1].bone_target = handle_right.name
+    
+    driver.expression = f'(varname-{edit_distance_handle_left})*{edit_easein}/{edit_distance_handle_left} '
+
 
 
 
@@ -81,38 +116,22 @@ def bname(i, role='deform', side=None):
     name = '_'.join(str(a) for a in [role, side, bone_groups, i] if a is not None)
     return name
 
-def rig_ease(armature, ctrl_name, i):
+def rig_ease(armature, i):
     """
     Adds drivers to the ease parameters of the deform bones
     driving them by the scale of the controls
     """
-    bone_groups = bpy.context.window_manager.gopo_prop_group.current_bone_group
     num_bones = bpy.context.window_manager.gopo_prop_group.num_bones
-    if i > 0:
-        # ease out
-        deform_name = bname(i-1)
-        path_to_ease = f'pose.bones[\"{deform_name}\"].bbone_easeout'
-        
-        edit_easeout = armature.data.bones[deform_name].bbone_easeout
-        func = lambda x: f'max(-{edit_easeout}, 3*({x}-1))'
-        add_driver(armature,
-                   armature,
-                   path_to_ease,
-                   func=func,
-                   transform_type='SCALE_AVG',
-                   source_bone=ctrl_name)
+    
     if i < num_bones:
         # ease in
         deform_name = bname(i)
-        path_to_ease = f'pose.bones[\"{deform_name}\"].bbone_easein'
-        edit_easein = armature.data.bones[deform_name].bbone_easein
-        func = lambda x: f'max(-{edit_easein}, 3*({x}-1))'
-        add_driver(armature,
-                   armature,
-                   path_to_ease,
-                   func=func,
-                   transform_type='SCALE_AVG',
-                   source_bone=ctrl_name)
+        handle_left_name = bname(i, role='handle', side='left')
+        handle_right_name = bname(i, role='handle', side='right')
+        def_bone = armature.pose.bones[deform_name]
+        handle_left = armature.pose.bones[handle_left_name]
+        handle_right = armature.pose.bones[handle_right_name]
+        add_driver(i, def_bone, handle_left, handle_right)
     
 
 def add_auxiliary_meshes():
@@ -276,10 +295,15 @@ def add_handles(armature, i):
     """
     bones = armature.data.bones
     def_bone = bones[bname(i)]
-    def_bone.bbone_custom_handle_start = bones[bname(i,role='handle',side='left')]
+    handle_left = bones[bname(i,role='handle',side='left')]
+    handle_right = bones[bname(i, 'handle', 'right')]
+    def_bone.bbone_custom_handle_start = handle_left
     def_bone.bbone_handle_type_start = 'ABSOLUTE'
-    def_bone.bbone_custom_handle_end = bones[bname(i, 'handle', 'right')]
+    def_bone.bbone_custom_handle_end = handle_right
     def_bone.bbone_handle_type_end = 'ABSOLUTE'
+
+    rig_ease(armature,i)
+    
 
 def add_copy_location(armature, subtarget, i):
     """
@@ -378,12 +402,11 @@ def add_control_bones(armature, pos):
         if i == len(pos) -1:
             add_stretch_to(armature, bname(i+1, role='ctrl_stroke'), i+1)
 
-        rig_ease(armature, name, i)
-
+        
         # setting handles
         add_handles(armature, i)
     # for the last control bone
-    rig_ease(armature, bname(len(pos), role='ctrl_stroke'), len(pos))
+    
 
     pbones = armature.pose.bones
     for bone in pbones:
