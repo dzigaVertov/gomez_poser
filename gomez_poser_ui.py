@@ -53,6 +53,7 @@ class GopoProperties(bpy.types.PropertyGroup):
                        default=1,
                        min=1,
                        max=1000000)
+    bake_to_new_layer : BoolProperty(name='bake_to_new_layer', description='Bake the stroke to new layer', default=False)
 
     
 def add_driver(i, def_bone, handle_left, handle_right):
@@ -181,7 +182,7 @@ def add_auxiliary_meshes():
     bm.free()
 
     ctrl_cone_ob.display_type = 'WIRE'
-    initialized = True
+    bpy.context.window_manager.gopo_prop_group.initialized = True
 
 
 def get_stroke_index(gp_ob):
@@ -384,7 +385,7 @@ def add_control_bones(armature, pos, threshold):
         edbone_left.use_deform = False
         edbone_left.parent = ed_bones[bname(i, role='ctrl_stroke')]
         edbone_left.inherit_scale = 'NONE'
-        edbone.rigged_stroke = bone_groups
+        edbone_left.rigged_stroke = bone_groups
 
         edbone_right.head = h_right
         edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
@@ -486,6 +487,8 @@ def add_weights(gp_ob, stroke):
 
     bpy.context.view_layer.objects.active = gp_ob
     bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
+    bpy.ops.gpencil.select_all(action='DESELECT')
+
     con = change_context(gp_ob)
 
     def_vertex_groups = [group for group in gp_ob.vertex_groups if group.name.startswith(name_base)]
@@ -521,7 +524,7 @@ def prepare_interface(armature):
     bpy.ops.greasepencil.go_pose()
 
 
-def fit_and_add_bones(armature, gp_ob, context, threshold):
+def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshold):
 
     # Get and initialize stroke to be rigged
     group_id = context.window_manager.gopo_prop_group.current_bone_group
@@ -537,7 +540,7 @@ def fit_and_add_bones(armature, gp_ob, context, threshold):
     
     context.view_layer.objects.active = gp_ob
     # fit the curve
-    error = context.window_manager.gopo_prop_group.error_threshold
+    error = error_threshold
     bpy.ops.gpencil.fit_curve(error_threshold=error,
                               target='ARMATURE',
                               stroke_index=stroke_index)
@@ -546,7 +549,7 @@ def fit_and_add_bones(armature, gp_ob, context, threshold):
     # store the length of the chain for rigging purposes
     bpy.context.window_manager.gopo_prop_group.num_bones = len(pos)
     add_deform_bones(armature, pos, ease)
-    add_control_bones(armature, pos, threshold)
+    add_control_bones(armature, pos, closed_threshold)
     add_armature(gp_ob, stroke, armature)
     add_vertex_groups(gp_ob, armature)
     add_weights(gp_ob, stroke)
@@ -677,15 +680,19 @@ class Gomez_OT_Poser(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     closed_stroke_threshold : FloatProperty(name='closed_stroke_threshold', default=0.03)
+    error_threshold : FloatProperty(name='error_threshold', default=0.01)
 
     def invoke(self, context, event):
         if context.object.type == 'GPENCIL':
             context.window_manager.gopo_prop_group.current_bone_group +=1
             context.window_manager.gopo_prop_group.gp_ob = context.object
+            self.error_threshold = context.window_manager.gopo_prop_group.error_threshold
             return self.execute(context)
         return {'CANCELLED'}
 
     def execute(self, context):
+        if 'ctrl_sphere' not in bpy.data.objects:
+            context.window_manager.gopo_prop_group.initialized = False
         if context.mode == 'POSE':
             bpy.ops.object.mode_set(mode='OBJECT')
             gp_ob = context.window_manager.gopo_prop_group.gp_ob
@@ -694,7 +701,7 @@ class Gomez_OT_Poser(bpy.types.Operator):
         gp_ob = context.object
         ob_armature = context.window_manager.gopo_prop_group.ob_armature
         
-        fit_and_add_bones(ob_armature, gp_ob, context, self.closed_stroke_threshold)
+        fit_and_add_bones(ob_armature, gp_ob, context, self.closed_stroke_threshold, self.error_threshold)
 
         return {'FINISHED'}
 
@@ -752,6 +759,7 @@ class GomezPTPanel(bpy.types.Panel):
         layout.row().prop(context.window_manager.gopo_prop_group, 'frame_init')
         layout.row().prop(context.window_manager.gopo_prop_group, 'frame_end')
         layout.row().prop(context.window_manager.gopo_prop_group, 'bake_step')
+        layout.row().prop(context.window_manager.gopo_prop_group, 'bake_to_new_layer')
         layout.row().operator("greasepencil.gp_bake_animation")
         
 
