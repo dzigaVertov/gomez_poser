@@ -147,6 +147,7 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
         for fr in range(inf, outf+1, step):
             context.scene.frame_set(fr)
 
+            # TODO: See to take this out of the loop
             evald_stroke = gp_obeval.data.layers.active.active_frame.strokes[stroke_idx]
             n_points = len(evald_stroke.points)
 

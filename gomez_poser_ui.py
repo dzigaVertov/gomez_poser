@@ -418,7 +418,7 @@ def add_control_bones(armature, pos, threshold):
     for bone in pbones:
         if bone.name.startswith('ctrl'):
             bone.custom_shape = bpy.data.objects['ctrl_sphere']
-            bone.custom_shape_scale = 0.1
+            bone.custom_shape_scale = 0.025
             armature.data.bones[bone.name].layers[0] = True
             armature.data.bones[bone.name].layers[-1] = False
             # TODO FIX this if bone has parent, hide it
@@ -428,7 +428,7 @@ def add_control_bones(armature, pos, threshold):
 
         if bone.name.startswith('handle'):
             bone.custom_shape = bpy.data.objects['ctrl_cone']
-            bone.custom_shape_scale = 0.05
+            bone.custom_shape_scale = 0.01
             armature.data.bones[bone.name].show_wire = True
             armature.data.bones[bone.name].layers[1] = True
             armature.data.bones[bone.name].layers[0] = False
@@ -559,40 +559,121 @@ def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshol
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 def set_control_visibility(context, event):
-    mo = Vector((event.mouse_region_x, event.mouse_region_y))
+    """
+    Controls visibility of control and handle bones
+    Makes all controls from the same stroke visible 
+    if shift is pressed makes all controls visible.
+    """
+    
     pbones = context.object.pose.bones
-    width = context.region.width
+    if not pbones:
+        return
+    ctrls_to_show = set(pbone.bone.rigged_stroke for pbone in context.selected_pose_bones)       
+    
     for pbone in  pbones:
-        pos_bone = location_3d_to_region_2d(context.region, context.space_data.region_3d, pbone.head)
+        
         ctrl_bone = pbone.name.startswith('ctrl')
         handle_bone = pbone.name.startswith('handle')
-        dist_cond = (mo-pos_bone).length < width/6
-        sel_cond = pbone.bone.select 
-        if not (ctrl_bone or handle_bone):
-            pbone.bone.layers[0] = False
+        
+        if (ctrl_bone or handle_bone) and pbone.bone.rigged_stroke in ctrls_to_show:
+            pbone.bone.layers[0] = True
             pbone.bone.layers[3] = True
-        else:
-            if ctrl_bone and dist_cond:
-                pbone.bone.layers[0] = True
-                pbone.bone.layers[3] = False
-            elif not handle_bone:
-                pbone.bone.layers[0]=False
-                pbone.bone.layers[3]= True
-            if sel_cond:
-                pbone.bone.layers[0] = True
-                pbone.bone.layers[3] = False
-                for ch in pbone.children:
-                    ch.bone.layers[0] = True
-                    ch.bone.layers[3] = False
-            else:
-                for ch in pbone.children:
-                    ch.bone.layers[0] = False
-                    ch.bone.layers[3] = True
-                
-                
+        elif (ctrl_bone or handle_bone):
+            pbone.bone.layers[0] = event.shift
+            pbone.bone.layers[3] = True
             
- 
-    
+def get_group_to_resample(context, gp_ob=None):
+    """
+    Returns stroke to be resampled, sets edit mode if coming from POSE
+    """
+    if not gp_ob:
+        gp_ob = context.window_manager.gopo_prop_group.gp_ob
+        
+    if context.mode == 'EDIT_GPENCIL':
+        for stroke in gp_ob.data.layers.active.active_frame.strokes:
+            if stroke.select:
+                return stroke.bone_groups
+        return None
+
+    if context.mode == 'POSE':
+        if not context.active_pose_bone:
+            return None
+
+        return context.active_pose_bone.bone.rigged_stroke
+        
+            
+class GOMEZ_OT_resample_rigged(bpy.types.Operator):
+    """
+    Resample a rigged stroke
+    """
+    bl_idname = "greasepencil.resample_rigged"
+    bl_label = "Gposer resample rigged stroke"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    max_dist : FloatProperty(name='max distance',
+                             description='Maximum distance between consecutive points',
+                             default=0.1)
+    gp_ob : PointerProperty(type=bpy.types.Object, name='gpencil_ob', description='The Grease Pencil object to resample')
+
+    def get_stroke_to_resample(self, context, group_id, gp_ob=None):
+        if not gp_ob:
+            gp_ob = self.gp_ob
+        for layer in gp_ob.data.layers:
+            for frame in layer.frames:
+                for stroke in frame.strokes:
+                    if stroke.bone_groups == group_id:
+                        return stroke
+
+    def get_points_indices_for_subdivide(self, context, group_id):
+        depsgraph = context.evaluated_depsgraph_get()
+        gp_ob = self.gp_ob
+        gp_obeval = gp_ob.evaluated_get(depsgraph)
+        evald_stroke = self.get_stroke_to_resample(context,group_id, gp_ob=gp_obeval)
+
+        point_pairs = zip(evald_stroke.points, evald_stroke.points[1:])
+        indices = []
+        for idx, pair in enumerate(point_pairs):
+            point_1, point_2 = pair
+            if (point_1.co - point_2.co).length > self.max_dist:
+                indices.append(idx)
+
+        return indices
+        
+
+
+
+    def invoke(self, context, event):
+        self.gp_ob = context.window_manager.gopo_prop_group.gp_ob
+        return self.execute(context)
+
+    def execute(self, context):
+        group_id = get_group_to_resample(context)
+        if not group_id:
+            return {'CANCELLED'}
+
+        indices = self.get_points_indices_for_subdivide(context, group_id)
+        if not indices:
+            return {'FINISHED'}
+
+        context.view_layer.objects.active=self.gp_ob
+        bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
+        bpy.ops.gpencil.select_all(action='DESELECT')
+        stroke = self.get_stroke_to_resample(context, group_id)
+        while indices:
+            idx = indices.pop()
+            first_point = stroke.points[idx]
+            second_point = stroke.points[idx + 1]
+            first_point.select = True
+            second_point.select = True
+            bpy.ops.gpencil.stroke_subdivide()
+            bpy.ops.gpencil.select_all(action='DESELECT')
+            indices = self.get_points_indices_for_subdivide(context, group_id)
+                
+        return {'FINISHED'}
+            
+        
+
+            
 class GOMEZ_OT_go_pose(bpy.types.Operator):
     """
     Go from draw mode of the gp_ob  to pose mode of the armature
@@ -602,6 +683,8 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def modal(self, context, event):
+        if not context.active_object.type == 'ARMATURE':
+            return {'FINISHED'}
         if event.shift and event.type == 'O':
             bpy.ops.armature.go_draw()
             return {'FINISHED'}
@@ -626,6 +709,7 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
         
         return {'RUNNING_MODAL'}
 
+    
     
     @classmethod
     def poll(cls, context):
@@ -771,6 +855,7 @@ def register():
     bpy.utils.register_class(GomezPTPanel)
     bpy.utils.register_class(GOMEZ_OT_go_draw)
     bpy.utils.register_class(GOMEZ_OT_go_pose)
+    bpy.utils.register_class(GOMEZ_OT_resample_rigged)
 
     
     bpy.types.WindowManager.gopo_prop_group = PointerProperty(type=GopoProperties)
@@ -806,6 +891,7 @@ def unregister():
     bpy.utils.unregister_class(GomezPTPanel)
     bpy.utils.unregister_class(GOMEZ_OT_go_draw)
     bpy.utils.unregister_class(GOMEZ_OT_go_pose)
+    bpy.utils.unregister_class(GOMEZ_OT_resample_rigged)
         
     del bpy.types.WindowManager.gopo_prop_group
     del bpy.types.WindowManager.fitted_bones
