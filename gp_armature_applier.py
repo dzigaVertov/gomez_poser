@@ -5,6 +5,37 @@ from bpy.props import IntProperty
 from bpy.props import BoolProperty, PointerProperty, CollectionProperty, StringProperty
 from mathutils import Vector, Matrix
 
+def remove_vertex_groups(gp_ob, group_id, group_type='deform_'):
+    """
+    Removes vertex groups froma a grease pencil object pertaining
+    a bonegroup.  Named with either deform_ or Armature stem.
+    """
+    for vgroup in gp_ob.vertex_groups[:]:
+        if vgroup.name.startswith(group_type + str(group_id)):
+            gp_ob.vertex_groups.remove(vgroup)
+
+def remove_armature_mod(gp_ob, group_id):
+    """
+    Remove armature modifier from a grease pencil object, pertaining
+    a bonegroup
+    """
+    for mod in gp_ob.grease_pencil.modifiers[:]:
+        if mod.vertex_group.starts_with('Armature'+ str(group_id)):
+            gp_ob.grease_pencil.modifiers.remove(mod)
+
+
+def remove_stroke(gp_ob, group_id):
+    """
+    Removes a stroke with a given bonegroup
+    """
+    
+    for layer in gp_ob.data.layers:
+        for frame in layer.frames:
+            for stroke in frame.strokes:
+                if stroke.bone_groups == group_id:
+                    frame.strokes.remove(stroke)
+    
+
 def get_target_strokes(context):
     """
     Returns the bonegroups of the strokes where the modifier should be applied
@@ -16,6 +47,7 @@ def get_target_strokes(context):
     all_strokes = gp_ob.data.layers.active.active_frame.strokes
 
     return [stroke.bone_groups for stroke in all_strokes if stroke.select]
+
 
 def clean_strokes(context, group_id):
     """
@@ -30,6 +62,7 @@ def clean_strokes(context, group_id):
                 if stroke.bone_groups == group_id:
                     stroke.bone_groups = 0
 
+                    
 def clean_gp_object(context, group_id):
     """
     Remove all deform and armature vertex groups pertaining the group_id bone group.
@@ -39,21 +72,10 @@ def clean_gp_object(context, group_id):
     prop_group = context.window_manager.gopo_prop_group
     gp_ob = prop_group.gp_ob
 
-    for vgroup in gp_ob.vertex_groups:
-        if vgroup.name.startswith('Armature' + str(group_id)):
-            for mod in gp_ob.grease_pencil_modifiers:
-                if mod.vertex_group == vgroup.name:
-                    gp_ob.grease_pencil_modifiers.remove(mod)
-                    gp_ob.vertex_groups.remove(vgroup)
-                    break
-        elif vgroup.name.startswith('deform_' + str(group_id)):
-            gp_ob.vertex_groups.remove(vgroup)
-
-    for layer in gp_ob.data.layers:
-        for frame in layer.frames:
-            for stroke in frame.strokes:
-                if stroke.bone_groups == group_id:
-                    frame.strokes.remove(stroke)
+    remove_vertex_groups(gp_ob, group_id)
+    remove_vertex_groups(gp_ob, group_id, group_type='Armature')
+    remove_armature_mod(gp_ob, group_id)
+    remove_stroke(gp_ob, group_id)
                 
 
 def clean_bones(context,group_id):
