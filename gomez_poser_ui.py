@@ -9,7 +9,7 @@ import bmesh
 from . import gp_armature_applier
 from .gp_armature_applier import remove_vertex_groups
 from bpy_extras.view3d_utils import location_3d_to_region_2d
-
+from math import ceil, log
 
 # KEYMAP HANDLING
 addon_keymaps = []
@@ -222,6 +222,15 @@ def change_context(ob, obtype='GPENCIL'):
     return con
 
 
+def get_bone_world_position(bone, armature):
+    """
+    Calculates the position of head and tail of a bone
+    in world coordinates.
+    """
+    arm_world_matrix = armature.matrix_world
+    return arm_world_matrix @ bone.head_local, arm_world_matrix @ bone.tail_local
+
+
 def calculate_points_indices_from_bones(context, stroke):
     """
     Returns the indices of the points in the stroke that constitute the
@@ -241,10 +250,12 @@ def calculate_points_indices_from_bones(context, stroke):
     kd.balance()
 
     bones = [b for b in armature.data.bones if b.use_deform and b.rigged_stroke==group_id]
+    
     indices = [0]
     # TODO: add coordinate transformations
     for b in bones:
-        co, index, dist = kd.find(b.tail)
+        head, tail = get_bone_world_position(b, armature)
+        co, index, dist = kd.find(tail)
         indices.append(index)
 
     indices = sorted(indices)
@@ -514,19 +525,22 @@ def add_weights(context, gp_ob, stroke, bone_group=None):
     name_base = 'deform_' + str(bone_group)
 
     indices = get_points_indices(context, stroke)
-    pts = stroke.points
+
+    
 
     bpy.context.view_layer.objects.active = gp_ob
     bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
-    bpy.ops.gpencil.select_all(action='DESELECT')
+    
 
-    con = change_context(gp_ob)
+    pts = stroke.points
 
     def_vertex_groups = [
         group for group in gp_ob.vertex_groups if group.name.startswith(name_base)]
 
     for group, idx in zip(def_vertex_groups, indices):
-
+        for point in pts:
+            point.select = False
+        # bpy.ops.gpencil.select_all(action='DESELECT')
         gp_ob.vertex_groups.active_index = group.index
         min_pt_index, max_pt_index = idx
 
@@ -535,8 +549,9 @@ def add_weights(context, gp_ob, stroke, bone_group=None):
                 pts[point_idx].select = True
             else:
                 pts[point_idx].select = False
-
+        con = change_context(gp_ob)
         bpy.ops.gpencil.vertex_group_assign(con)
+                    
 
     # at the end make sure all points in stroke are deselected
     for point in pts:
@@ -647,12 +662,12 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
 
     max_dist: FloatProperty(name='max distance',
                             description='Maximum distance between consecutive points',
-                            default=0.1)
+                            default=0.025)
     gp_ob: PointerProperty(type=bpy.types.Object, name='gpencil_ob', description='The Grease Pencil object to resample')
 
     def get_stroke_to_resample(self, context, group_id, gp_ob=None):
         if not gp_ob:
-            gp_ob = self.gp_ob
+            gp_ob = bpy.context.window_manager.gopo_prop_group.gp_ob
         for layer in gp_ob.data.layers:
             for frame in layer.frames:
                 for stroke in frame.strokes:
@@ -661,17 +676,24 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
 
     def get_points_indices_for_subdivide(self, context, group_id):
         depsgraph = context.evaluated_depsgraph_get()
-        gp_ob = self.gp_ob
+        gp_ob = bpy.context.window_manager.gopo_prop_group.gp_ob # self.gp_ob
+        
         gp_obeval = gp_ob.evaluated_get(depsgraph)
         evald_stroke = self.get_stroke_to_resample(
             context, group_id, gp_ob=gp_obeval)
 
         point_pairs = zip(evald_stroke.points, evald_stroke.points[1:])
         indices = []
+        max_dixt = (0,0)
         for idx, pair in enumerate(point_pairs):
             point_1, point_2 = pair
-            if (point_1.co - point_2.co).length > self.max_dist:
-                indices.append(idx)
+            dist = (point_1.co - point_2.co).length
+            if dist>max_dixt[0]:
+                max_dixt = (dist, idx)
+            if  dist > self.max_dist:
+                divides = int(log(dist / (2*self.max_dist), 2))
+                if divides > 0:
+                    indices.append((idx,divides))
 
         return indices
 
@@ -681,6 +703,7 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
 
     def execute(self, context):
         group_id = get_group_to_resample(context)
+        gp_ob = context.window_manager.gopo_prop_group.gp_ob
         if not group_id:
             return {'CANCELLED'}
 
@@ -688,24 +711,25 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
         if not indices:
             return {'FINISHED'}
 
-        context.view_layer.objects.active = self.gp_ob
+        context.view_layer.objects.active = gp_ob
         bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
         bpy.ops.gpencil.select_all(action='DESELECT')
         stroke = self.get_stroke_to_resample(context, group_id)
-        while indices:
-            idx = indices.pop()
+        
+        for idx, times in reversed(indices):
             first_point = stroke.points[idx]
             second_point = stroke.points[idx + 1]
             first_point.select = True
             second_point.select = True
-            bpy.ops.gpencil.stroke_subdivide()
+            for _ in range(times):
+                bpy.ops.gpencil.stroke_subdivide()
             bpy.ops.gpencil.select_all(action='DESELECT')
-            indices = self.get_points_indices_for_subdivide(context, group_id)
 
-        remove_vertex_groups(self.gp_ob, group_id) # vertex groups need to be rebuilt
+        remove_vertex_groups(gp_ob, group_id) # vertex groups need to be rebuilt
+        
         armature = context.window_manager.gopo_prop_group.ob_armature
-        add_vertex_groups(self.gp_ob,armature, bone_group=group_id )
-        add_weights(context, self.gp_ob, stroke, bone_group=group_id)
+        add_vertex_groups(gp_ob,armature, bone_group=group_id )
+        add_weights(context,gp_ob, stroke, bone_group=group_id)
         return {'FINISHED'}
 
 
