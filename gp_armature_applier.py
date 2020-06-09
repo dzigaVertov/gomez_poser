@@ -19,9 +19,9 @@ def remove_armature_mod(gp_ob, group_id):
     Remove armature modifier from a grease pencil object, pertaining
     a bonegroup
     """
-    for mod in gp_ob.grease_pencil.modifiers[:]:
-        if mod.vertex_group.starts_with('Armature'+ str(group_id)):
-            gp_ob.grease_pencil.modifiers.remove(mod)
+    for mod in gp_ob.grease_pencil_modifiers[:]:
+        if mod.vertex_group.startswith('Armature'+ str(group_id)):
+            gp_ob.grease_pencil_modifiers.remove(mod)
 
 
 def remove_stroke(gp_ob, group_id):
@@ -46,7 +46,7 @@ def get_target_strokes(context):
     gp_ob = context.object
     all_strokes = gp_ob.data.layers.active.active_frame.strokes
 
-    return [stroke.bone_groups for stroke in all_strokes if stroke.select]
+    return set([stroke.bone_groups for stroke in all_strokes if stroke.select])
 
 
 def clean_strokes(context, group_id):
@@ -129,7 +129,7 @@ class GOMEZ_OT_clean_baked(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.mode in {'POSE', 'EDIT_GPENCIL'}
+        return context.mode in {'POSE', 'EDIT_GPENCIL', 'OBJECT'}
 
 
     
@@ -155,8 +155,11 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
                        default=1,
                        min=1,
                        max=1000000)
-    bake_to_new_layer : BoolProperty(name='bake_to_new_layer', description='Bake the stroke to new layer', default=False)
+    bake_to_new_layer : BoolProperty(name='bake_to_new_layer',
+                                     description='Bake the stroke to new layer',
+                                     default=False)
 
+    
     def bake_stroke(self, context, gp_ob, gp_obeval, new_layer, group_id):
         inf = self.frame_init
         outf = self.frame_end
@@ -196,8 +199,14 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
 
     def invoke(self, context, event):
         props = context.window_manager.gopo_prop_group
-        self.frame_init = props.frame_init
-        self.frame_end =  props.frame_end
+
+        if props.bake_from_active_to_current:
+            gp_ob = props.gp_ob
+            self.frame_init = gp_ob.data.layers.active.active_frame.frame_number
+            self.frame_end = context.scene.frame_current
+        else:
+            self.frame_init = props.frame_init
+            self.frame_end =  props.frame_end
         self.step = props.bake_step
         self.bake_to_new_layer = props.bake_to_new_layer
 
@@ -205,8 +214,17 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
 
 
     def execute(self, context):        
-        
-        bone_groups = get_target_strokes(context)
+
+        if context.mode =='POSE':
+            bone_groups = set()
+            for pbone in context.selected_pose_bones:
+                bone_groups.add(context.active_pose_bone.bone.rigged_stroke)
+            bpy.ops.object.mode_set(mode='OBJECT')
+            gp_ob = context.window_manager.gopo_prop_group.gp_ob
+            gp_ob.select_set(True)
+            context.view_layer.objects.active = gp_ob
+        else:
+            bone_groups = get_target_strokes(context)
         depsgraph = context.evaluated_depsgraph_get()
         gp_ob = context.object
         gp_obeval = gp_ob.evaluated_get(depsgraph)
@@ -228,8 +246,11 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
     def poll(cls, context):
         """
         There must be an active greasepencil object with active layer and active frame
+        Or we must be posing the armature
         """
-        
+        if context.mode == 'POSE':
+            if context.active_pose_bone:
+                return True
         if context.object:
             if context.object.type == 'GPENCIL':
                 if context.object.data.layers.active:

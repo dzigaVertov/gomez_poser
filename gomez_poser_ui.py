@@ -54,7 +54,14 @@ class GopoProperties(bpy.types.PropertyGroup):
                            default=1,
                            min=1,
                            max=1000000)
-    bake_to_new_layer: BoolProperty(name='bake_to_new_layer', description='Bake the stroke to new layer', default=False)
+
+    bake_to_new_layer : BoolProperty(name='bake_to_new_layer',
+                                     description='Bake the stroke to new layer',
+                                     default=False)
+    
+    bake_from_active_to_current : BoolProperty(name='from_active_to_current',
+                                               description='Bake stroke from active keyframe to current frame',
+                                               default=True)
 
 
 def add_driver(i, def_bone, handle_left, handle_right):
@@ -557,6 +564,7 @@ def add_weights(context, gp_ob, stroke, bone_group=None):
     for point in pts:
         point.select = False
 
+    # TODO: change this, should not be set here
     bpy.ops.object.mode_set(mode='PAINT_GPENCIL')
 
 
@@ -663,7 +671,10 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
     max_dist: FloatProperty(name='max distance',
                             description='Maximum distance between consecutive points',
                             default=0.025)
-    gp_ob: PointerProperty(type=bpy.types.Object, name='gpencil_ob', description='The Grease Pencil object to resample')
+
+    gp_ob: PointerProperty(type=bpy.types.Object,
+                           name='gpencil_ob',
+                           description='The Grease Pencil object to resample')
 
     def get_stroke_to_resample(self, context, group_id, gp_ob=None):
         if not gp_ob:
@@ -697,10 +708,12 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
 
         return indices
 
+
     def invoke(self, context, event):
         self.gp_ob = context.window_manager.gopo_prop_group.gp_ob
         return self.execute(context)
 
+    
     def execute(self, context):
         group_id = get_group_to_resample(context)
         gp_ob = context.window_manager.gopo_prop_group.gp_ob
@@ -711,6 +724,8 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
         if not indices:
             return {'FINISHED'}
 
+        original_mode = context.mode
+        
         context.view_layer.objects.active = gp_ob
         bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
         bpy.ops.gpencil.select_all(action='DESELECT')
@@ -730,7 +745,23 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
         armature = context.window_manager.gopo_prop_group.ob_armature
         add_vertex_groups(gp_ob,armature, bone_group=group_id )
         add_weights(context,gp_ob, stroke, bone_group=group_id)
+
+        if original_mode== 'POSE':
+            bpy.ops.object.mode_set(mode='OBJECT')
+            armature.select_set(True)
+            context.view_layer.objects.active = armature
+            bpy.ops.object.mode_set(mode='POSE')
+            
         return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        if not ((context.mode == 'POSE') or (context.mode == 'EDIT_GPENCIL')):
+                return False
+        return True
+        
+        
+
 
 
 class GOMEZ_OT_go_pose(bpy.types.Operator):
@@ -885,23 +916,34 @@ class GomezPTPanel(bpy.types.Panel):
     bl_category = 'Gomez Poser'
 
     def draw(self, context):
+        addon_properties = context.window_manager.gopo_prop_group
         layout = self.layout
         layout.label(text="Divisiones")
         layout.use_property_split = True
-        layout.row().prop(context.window_manager.gopo_prop_group, 'error_threshold')
-        layout.row().prop(context.window_manager.gopo_prop_group, 'num_bendy')
-        layout.row().prop(context.window_manager.gopo_prop_group,
-                          'ob_armature', icon='OUTLINER_OB_ARMATURE', text='Armature')
-        layout.row().prop(context.window_manager.gopo_prop_group, 'gp_ob',
-                          icon='OUTLINER_OB_GREASEPENCIL', text='gpencil')
+
+        layout.row().prop(addon_properties, 'error_threshold')
+
+        layout.row().prop(addon_properties, 'num_bendy')
+
+        layout.row().prop(addon_properties,
+                          'ob_armature',
+                          icon='OUTLINER_OB_ARMATURE',
+                          text='Armature')
+
+        layout.row().prop(addon_properties,
+                          'gp_ob',
+                          icon='OUTLINER_OB_GREASEPENCIL',
+                          text='gpencil')
+        
         what = layout.row().operator("greasepencil.poser")
 
         layout.column()
 
-        layout.row().prop(context.window_manager.gopo_prop_group, 'frame_init')
-        layout.row().prop(context.window_manager.gopo_prop_group, 'frame_end')
-        layout.row().prop(context.window_manager.gopo_prop_group, 'bake_step')
-        layout.row().prop(context.window_manager.gopo_prop_group, 'bake_to_new_layer')
+        layout.row().prop(addon_properties, 'frame_init')
+        layout.row().prop(addon_properties, 'frame_end')
+        layout.row().prop(addon_properties, 'bake_step')
+        layout.row().prop(addon_properties, 'bake_to_new_layer')
+        layout.row().prop(addon_properties, 'bake_from_active_to_current')
         layout.row().operator("greasepencil.gp_bake_animation")
 
 
@@ -937,12 +979,19 @@ def register():
             'greasepencil.go_pose', type='L', value='PRESS', shift=True)
         kmll = km.keymap_items.new(
             'armature.select_all_ctrls', type='L', value='PRESS', shift=True, ctrl=True)
+        kmrr = km.keymap_items.new(
+            'greasepencil.resample_rigged', type='R', value='PRESS',shift=True,  ctrl=True)
+        kmbb = km.keymap_items.new(
+            'greasepencil.gp_bake_animation', type='B', value='PRESS', shift=True, ctrl=True)
+        
         addon_keymaps.append((km, kmi))
         addon_keymaps.append((km, kmj))
         addon_keymaps.append((km, kml))
         addon_keymaps.append((km, kmll))
+        addon_keymaps.append((km, kmrr))
+        addon_keymaps.append((km, kmbb))
 
-
+        
 def unregister():
     bpy.utils.unregister_class(FittedBone)
     bpy.utils.unregister_class(GopoProperties)
