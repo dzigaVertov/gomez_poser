@@ -160,36 +160,54 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
                                      default=False)
 
     
-    def bake_stroke(self, context, gp_ob, gp_obeval, new_layer, group_id):
+    def bake_stroke(self, context, gp_ob, gp_obeval, source_layer, target_layer, group_id):
         inf = self.frame_init
         outf = self.frame_end
         step = self.step
 
-        for idx,stroke in enumerate(gp_ob.data.layers.active.active_frame.strokes):
-            if stroke.bone_groups == group_id:
+        stroke = None
+        for idx,st in enumerate(source_layer.active_frame.strokes):
+            if st.bone_groups == group_id:
                 stroke_idx = idx
+                stroke = st
+
+        if not stroke:
+            return         
+
+        material_index = stroke.material_index
+        line_width = stroke.line_width
+        vertex_color_fill = stroke.vertex_color_fill
+        # First get the points.
+        baked_points = dict()
 
         for fr in range(inf, outf+1, step):
             context.scene.frame_set(fr)
 
-            # TODO: See to take this out of the loop
             evald_stroke = gp_obeval.data.layers.active.active_frame.strokes[stroke_idx]
-            n_points = len(evald_stroke.points)
 
-            if new_layer.active_frame and new_layer.active_frame.frame_number == fr:
-                frame = new_layer.active_frame
+            pts_eval = list((pt.co.copy(), pt.strength, pt.pressure, pt.vertex_color) for pt in evald_stroke.points)
+
+            baked_points[fr] = pts_eval
+
+        # now create frames and strokes
+        for fr in range(inf, outf+1, step):
+            context.scene.frame_set(fr)
+            
+            n_points = len(stroke.points)
+
+            if target_layer.active_frame and target_layer.active_frame.frame_number == fr:
+                frame = target_layer.active_frame
             else:
-                frame = new_layer.frames.new(fr, active=True)
+                frame = target_layer.frames.new(fr, active=True)
                 
-            stroke = frame.strokes.new()
-            stroke.points.add(n_points)
-            stroke.line_width = evald_stroke.line_width
-            stroke.material_index = evald_stroke.material_index
-
-            pts_eval = ((pt.co.copy(), pt.strength, pt.pressure, pt.vertex_color) for pt in evald_stroke.points)
-
+            new_stroke = frame.strokes.new()
+            new_stroke.points.add(n_points)
+            new_stroke.line_width = line_width
+            new_stroke.material_index = material_index
+            new_stroke.vertex_color_fill = vertex_color_fill
+            
             # TODO: Change this to for_each_set
-            for gp_pt, pt in zip(stroke.points, pts_eval):
+            for gp_pt, pt in zip(new_stroke.points, baked_points[fr]):
                 coords, strength, pressure, v_color = pt
                 gp_pt.co = coords
                 gp_pt.strength = strength
@@ -236,7 +254,7 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
             layer = gp_ob.data.layers.active 
 
         for group_id in bone_groups:
-            self.bake_stroke(context, gp_ob, gp_obeval,layer, group_id)
+            self.bake_stroke(context, gp_ob, gp_obeval,layer_to_bake, layer,  group_id)
             bpy.ops.greasepencil.gp_clean_baked(group_id=group_id)
 
         return {'FINISHED'}
