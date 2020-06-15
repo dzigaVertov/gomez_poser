@@ -236,7 +236,7 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
         if context.mode =='POSE':
             bone_groups = set()
             for pbone in context.selected_pose_bones:
-                bone_groups.add(context.active_pose_bone.bone.rigged_stroke)
+                bone_groups.add(pbone.bone.rigged_stroke)
             bpy.ops.object.mode_set(mode='OBJECT')
             gp_ob = context.window_manager.gopo_prop_group.gp_ob
             gp_ob.select_set(True)
