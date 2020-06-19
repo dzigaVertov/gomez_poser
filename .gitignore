@@ -9,3 +9,7 @@
 fit_curve.cpython-37.pyc
 /fit/.ipynb_checkpoints/
 /gp_armature_applier.py~
+/gp_auxiliary_objects.py~
+/gp_custom_props.py~
+/gp_resampling_ops.py~
+/gp_rigging_ops.py~

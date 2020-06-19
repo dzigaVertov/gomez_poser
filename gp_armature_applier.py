@@ -5,13 +5,13 @@ from bpy.props import IntProperty
 from bpy.props import BoolProperty, PointerProperty, CollectionProperty, StringProperty
 from mathutils import Vector, Matrix
 
-def remove_vertex_groups(gp_ob, group_id, group_type='deform_'):
+def remove_vertex_groups(gp_ob, group_id):
     """
-    Removes vertex groups froma a grease pencil object pertaining
-    a bonegroup.  Named with either deform_ or Armature stem.
+    Removes vertex groups from a a grease pencil object pertaining
+    a bonegroup.
     """
     for vgroup in gp_ob.vertex_groups[:]:
-        if vgroup.name.startswith(group_type + str(group_id)):
+        if vgroup.bone_group == group_id:
             gp_ob.vertex_groups.remove(vgroup)
 
 def remove_armature_mod(gp_ob, group_id):
@@ -20,7 +20,8 @@ def remove_armature_mod(gp_ob, group_id):
     a bonegroup
     """
     for mod in gp_ob.grease_pencil_modifiers[:]:
-        if mod.vertex_group.startswith('Armature'+ str(group_id)):
+        vgroup = gp_ob.vertex_groups[mod.vertex_group]
+        if vgroup.bone_group and vgroup.bone_group == group_id:
             gp_ob.grease_pencil_modifiers.remove(mod)
 
 
@@ -72,9 +73,8 @@ def clean_gp_object(context, group_id):
     prop_group = context.window_manager.gopo_prop_group
     gp_ob = prop_group.gp_ob
 
-    remove_vertex_groups(gp_ob, group_id)
-    remove_vertex_groups(gp_ob, group_id, group_type='Armature')
     remove_armature_mod(gp_ob, group_id)
+    remove_vertex_groups(gp_ob, group_id)
     remove_stroke(gp_ob, group_id)
                 
 
@@ -276,23 +276,9 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
                         return True
 
         return False
-        
-class GOMEZ_OT_clean_strokes(bpy.types.Operator):
-    bl_idname = 'greasepencil.clean_stroke'
-    bl_label = 'Remove vertex group, armature modifier and bones'
-    bl_options = {'REGISTER', 'UNDO'}
 
-    stroke_indices : bpy.props.IntVectorProperty(name='indices of strokes',
-                                                 description='strokes to be cleaned',
-                                                 default=(-1))
 
-    def execute(self, context):
-        gp_ob = context.object
-        for idx in self.stroke_indices:
-            pass
-        
-            
-
+    
 class GOMEZ_OT_select_all_stroke_ctrls(bpy.types.Operator):
     bl_idname = 'armature.select_all_ctrls'
     bl_label = 'Select all controls of a given stroke'

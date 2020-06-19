@@ -33,14 +33,24 @@ bl_info = {
 import bpy
 from . import gp_armature_applier
 from . import gomez_poser_ui
+from . import gp_rigging_ops
+from . import gp_custom_props
+from . import gp_resampling_ops
+
 
 
 # register
 ##################################
 def register():
+    gp_custom_props.register()
     gp_armature_applier.register()
     gomez_poser_ui.register()
+    gp_rigging_ops.register()
+    gp_resampling_ops.register()
 
 def unregister():
     gp_armature_applier.unregister()
     gomez_poser_ui.unregister()
+    gp_rigging_ops.unregister()
+    gp_custom_props.unregister()
+    gp_resampling_ops.unregister()
