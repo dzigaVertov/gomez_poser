@@ -63,7 +63,7 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
 
     def get_stroke_to_resample(self, context, group_id, gp_ob=None):
         if not gp_ob:
-            gp_ob = bpy.context.window_manager.gopo_prop_group.gp_ob
+            gp_ob = context.window_manager.gopo_prop_group.gp_ob
         for layer in gp_ob.data.layers:
             for frame in layer.frames:
                 for stroke in frame.strokes:
@@ -72,7 +72,7 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
 
     def get_points_indices_for_subdivide(self, context, group_id):
         depsgraph = context.evaluated_depsgraph_get()
-        gp_ob = bpy.context.window_manager.gopo_prop_group.gp_ob # self.gp_ob
+        gp_ob = context.window_manager.gopo_prop_group.gp_ob # self.gp_ob
         
         gp_obeval = gp_ob.evaluated_get(depsgraph)
         evald_stroke = self.get_stroke_to_resample(
@@ -129,7 +129,7 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
         remove_vertex_groups(gp_ob, group_id, is_resampling=True)
         
         armature = context.window_manager.gopo_prop_group.ob_armature
-        add_vertex_groups(gp_ob,armature, bone_group=group_id )
+        add_vertex_groups(context, gp_ob,armature, bone_group=group_id )
         add_weights(context,gp_ob, stroke, bone_group=group_id)
 
         if original_mode== 'POSE':

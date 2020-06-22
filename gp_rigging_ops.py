@@ -31,11 +31,11 @@ def get_bone(bones, rigged_stroke, bone_type, bone_order):
             return b
 
 
-def add_driver(i, def_bone, handle_left, handle_right, group_id):
+def add_driver(context, i, def_bone, handle_left, handle_right, group_id):
     ''' Add drivers to ease properties of deform bone '''
     
-    num_bones = bpy.context.window_manager.gopo_prop_group.num_bones
-    armature = bpy.context.window_manager.gopo_prop_group.ob_armature
+    num_bones = context.window_manager.gopo_prop_group.num_bones
+    armature = context.window_manager.gopo_prop_group.ob_armature
 
     # distances in editmode
     # TODO: this looks dangerous: the bones passed to this function are posebones
@@ -79,38 +79,38 @@ def add_driver(i, def_bone, handle_left, handle_right, group_id):
     driver.expression = f'(varname-{edit_distance_handle_left})*{edit_easein}/{edit_distance_handle_left} '
 
 
-def bname(i, role='deform', side=None):
+def bname(context, i, role='deform', side=None):
     """
     Returns the name of a bone taking into account bone_group, role, index, and side
     """
-    bone_groups = bpy.context.window_manager.gopo_prop_group.current_bone_group
+    bone_groups = context.window_manager.gopo_prop_group.current_bone_group
     name = '_'.join(str(a)
                     for a in [role, side, bone_groups, i] if a is not None)
     return name
 
 
-def rig_ease(armature, i, group_id):
+def rig_ease(context, armature, i, group_id):
     """
     Adds drivers to the ease parameters of the deform bones
     driving them by the scale of the controls
     """
-    num_bones = bpy.context.window_manager.gopo_prop_group.num_bones
+    num_bones = context.window_manager.gopo_prop_group.num_bones
 
     if i < num_bones:
         # ease in
         def_bone = get_bone(armature.pose.bones, group_id, 'DEFORM', i)  
         handle_left = get_bone(armature.pose.bones, group_id, 'HANDLE_LEFT', i)  
         handle_right = get_bone(armature.pose.bones, group_id, 'HANDLE_RIGHT', i)  
-        add_driver(i, def_bone, handle_left, handle_right, group_id)
+        add_driver(context, i, def_bone, handle_left, handle_right, group_id)
 
 
-def get_stroke_index(gp_ob):
+def get_stroke_index(context, gp_ob):
     """
     Returns the index of either the first selected stroke or the last one added
     """
     strokes = gp_ob.data.layers.active.active_frame.strokes
-    C = bpy.context
-    mode = C.mode
+    
+    mode = context.mode
     if mode in {'OBJECT', 'EDIT_GPENCIL'}:
         # return the first selected
         for idx, stroke in enumerate(strokes):
@@ -120,12 +120,12 @@ def get_stroke_index(gp_ob):
     return -1
 
 
-def change_context(ob, obtype='GPENCIL'):
+def change_context(context, ob, obtype='GPENCIL'):
     """
     Modificar el contexto para cambiar los pesos
     de los vertex groups de grease pencil
     """
-    for area in bpy.context.screen.areas:
+    for area in context.screen.areas:
         if area.type == "VIEW_3D":
             break
     for region in area.regions:
@@ -133,7 +133,7 @@ def change_context(ob, obtype='GPENCIL'):
             break
 
     space = area.spaces[0]
-    con = bpy.context.copy()
+    con = context.copy()
     con['area'] = area
     con['region'] = region
     con['space_data'] = space
@@ -213,7 +213,7 @@ def get_bones_positions(context):
     return bones_positions, ease
 
 
-def add_deform_bones(armature, pos, ease, group_id):
+def add_deform_bones(context, armature, pos, ease, group_id):
     """
     Creates deform bones - Puts bones in positions
     Creates the hierarchy - Calculates roll
@@ -222,8 +222,8 @@ def add_deform_bones(armature, pos, ease, group_id):
     """
     armature.select_set(True)
     armature.hide_viewport = False
-    bpy.context.view_layer.objects.active = armature
-    num_bendy = bpy.context.window_manager.gopo_prop_group.num_bendy
+    context.view_layer.objects.active = armature
+    num_bendy = context.window_manager.gopo_prop_group.num_bendy
 
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
     ed_bones = armature.data.edit_bones
@@ -231,7 +231,7 @@ def add_deform_bones(armature, pos, ease, group_id):
     for i, pos in enumerate(pos):
         head, tail = pos
         ease_in, ease_out = ease[i]
-        name = bname(i)
+        name = bname(context, i)
 
         edbone = ed_bones.new(name)
         edbone.head = head
@@ -259,7 +259,7 @@ def add_deform_bones(armature, pos, ease, group_id):
             bone.layers[0] = False
 
 
-def add_handles(armature, i, group_id):
+def add_handles(context, armature, i, group_id):
     """
     Sets handle bones as bezier handles for the deform bone
     """
@@ -272,7 +272,7 @@ def add_handles(armature, i, group_id):
     def_bone.bbone_custom_handle_end = handle_right
     def_bone.bbone_handle_type_end = 'ABSOLUTE'
 
-    rig_ease(armature, i, group_id)
+    rig_ease(context, armature, i, group_id)
 
 
 def add_copy_location(armature, subtarget, i, group_id):
@@ -300,7 +300,7 @@ def add_stretch_to(armature, subtarget_name, i, group_id):
     constr.keep_axis = 'SWING_Y'
 
 
-def add_control_bones(armature, pos, threshold, group_id):
+def add_control_bones(context, armature, pos, threshold, group_id):
     """
     Adds control and handle bones in pos positions pointing up (for now) - 
 
@@ -308,17 +308,17 @@ def add_control_bones(armature, pos, threshold, group_id):
     Adds custom shapes - Puts control bones in first layer.
     Hides handle bones
     """
-    h_coefs = bpy.context.window_manager.fitted_bones
+    h_coefs = context.window_manager.fitted_bones
     handles = [(i.handle_l, i.handle_r) for i in h_coefs]
 
     armature.select_set(True)
-    bpy.context.view_layer.objects.active = armature
+    context.view_layer.objects.active = armature
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
     ed_bones = armature.data.edit_bones
     
     # add the knots
     for i, p in enumerate(pos):
-        name = bname(i, role='ctrl_stroke')
+        name = bname(context, i, role='ctrl_stroke')
         ctrl, tail = p
         edbone = ed_bones.new(name)
         edbone.head = Vector(ctrl)
@@ -330,7 +330,7 @@ def add_control_bones(armature, pos, threshold, group_id):
 
         # The tail of the last bone gets a knot
         if i == len(pos)-1:
-            name = bname(i+1, role='ctrl_stroke')
+            name = bname(context, i+1, role='ctrl_stroke')
             edbone = ed_bones.new(name)
             edbone.head = Vector(tail)
             edbone.tail = Vector(tail) + Vector((0.0, 0.0, 1.0))
@@ -346,8 +346,8 @@ def add_control_bones(armature, pos, threshold, group_id):
     # Add the handles
     for i, h in enumerate(handles):
         h_left, h_right = map(Vector, h)
-        name_left = bname(i, role='handle', side='left')
-        name_right = bname(i, role='handle', side='right')
+        name_left = bname(context, i, role='handle', side='left')
+        name_right = bname(context, i, role='handle', side='right')
         edbone_left = ed_bones.new(name_left)
         edbone_right = ed_bones.new(name_right)
 
@@ -384,7 +384,7 @@ def add_control_bones(armature, pos, threshold, group_id):
             add_stretch_to(armature, next_ctrl_bone.name, i+1, group_id)
 
         # setting handles
-        add_handles(armature, i, group_id)
+        add_handles(context, armature, i, group_id)
     # for the last control bone
 
     pose_bones = armature.pose.bones
@@ -408,7 +408,7 @@ def add_control_bones(armature, pos, threshold, group_id):
             rest_bone.layers[-1] = False
 
 
-def add_armature(gp_ob, stroke, armature, group_id):
+def add_armature(context, gp_ob, stroke, armature, group_id):
     """
     Adds an armature modifier to the greasepencil object
     Adds a new vertex group containing the stroke
@@ -421,14 +421,14 @@ def add_armature(gp_ob, stroke, armature, group_id):
 
     mod.object = armature
 
-    bpy.context.view_layer.objects.active = gp_ob
+    context.view_layer.objects.active = gp_ob
     bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
     bpy.ops.gpencil.select_all(action='DESELECT')
 
     for pt in stroke.points:
         pt.select = True
 
-    con = change_context(gp_ob)
+    con = change_context(context, gp_ob)
     vgroup = gp_ob.vertex_groups.new(name=name)
     vgroup.bone_group = group_id
     vgroup.deform_group = False
@@ -436,12 +436,12 @@ def add_armature(gp_ob, stroke, armature, group_id):
     mod.vertex_group = name
 
 
-def add_vertex_groups(gp_ob, armature, bone_group=None):
+def add_vertex_groups(context, gp_ob, armature, bone_group=None):
     """
     Add a vertex group for every deform bone
     """
     if not bone_group:
-        bone_group = bpy.context.window_manager.gopo_prop_group.current_bone_group
+        bone_group = context.window_manager.gopo_prop_group.current_bone_group
 
     name_base = 'deform_' + str(bone_group)
 
@@ -458,12 +458,12 @@ def add_weights(context, gp_ob, stroke, bone_group=None):
 
     """
     if not bone_group:
-        bone_group = bpy.context.window_manager.gopo_prop_group.current_bone_group
+        bone_group = context.window_manager.gopo_prop_group.current_bone_group
     name_base = 'deform_' + str(bone_group)
 
     indices = get_points_indices(context, stroke)
 
-    bpy.context.view_layer.objects.active = gp_ob
+    context.view_layer.objects.active = gp_ob
     bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
 
     pts = stroke.points
@@ -483,7 +483,7 @@ def add_weights(context, gp_ob, stroke, bone_group=None):
                 pts[point_idx].select = True
             else:
                 pts[point_idx].select = False
-        con = change_context(gp_ob)
+        con = change_context(context, gp_ob)
         bpy.ops.gpencil.vertex_group_assign(con)
 
     # at the end make sure all points in stroke are deselected
@@ -494,13 +494,13 @@ def add_weights(context, gp_ob, stroke, bone_group=None):
     bpy.ops.object.mode_set(mode='PAINT_GPENCIL')
 
 
-def prepare_interface(armature):
+def prepare_interface(context, armature):
     """
     Selecciona la armature, hace visible la capa de controles
     Cambia el modo a POSE
     Limpia la información de la curva fiteada
     """
-    bpy.context.window_manager.fitted_bones.clear()
+    context.window_manager.fitted_bones.clear()
     bpy.ops.greasepencil.go_pose()
 
 
@@ -508,7 +508,7 @@ def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshol
 
     # Get and initialize stroke to be rigged
     group_id = context.window_manager.gopo_prop_group.current_bone_group
-    stroke_index = get_stroke_index(gp_ob)
+    stroke_index = get_stroke_index(context, gp_ob)
     stroke = gp_ob.data.layers.active.active_frame.strokes[stroke_index]
 
     stroke.bone_groups = group_id
@@ -522,12 +522,12 @@ def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshol
     pos, ease = get_bones_positions(context)
     # store the length of the chain for rigging purposes
     context.window_manager.gopo_prop_group.num_bones = len(pos)
-    add_deform_bones(armature, pos, ease, group_id)
-    add_control_bones(armature, pos, closed_threshold, group_id)
-    add_armature(gp_ob, stroke, armature, group_id)
-    add_vertex_groups(gp_ob, armature, group_id)
+    add_deform_bones(context, armature, pos, ease, group_id)
+    add_control_bones(context, armature, pos, closed_threshold, group_id)
+    add_armature(context, gp_ob, stroke, armature, group_id)
+    add_vertex_groups(context, gp_ob, armature, group_id)
     add_weights(context, gp_ob, stroke, group_id)
-    prepare_interface(armature)
+    prepare_interface(context, armature)
 
 
 class Gomez_OT_Poser(bpy.types.Operator):
