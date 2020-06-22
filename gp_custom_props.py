@@ -96,7 +96,7 @@ def register():
     bpy.types.Bone.bone_order = IntProperty(name='bone_order',
                                             description='Place that the bone occupies in a chain, starting from 0',
                                             default=-1)
-    bpy.types.Bone.bone_order = IntProperty(name='bone_order',
+    bpy.types.EditBone.bone_order = IntProperty(name='bone_order',
                                             description='Place that the bone occupies in a chain, starting from 0',
                                             default=-1)
 

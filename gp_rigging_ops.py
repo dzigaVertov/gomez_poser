@@ -282,7 +282,7 @@ def add_copy_location(armature, subtarget, i, group_id):
     """
     pbones = armature.pose.bones
 
-    constr = get_bone(pbones, group_id, 'DEFORM', i )
+    constr = get_bone(pbones, group_id, 'DEFORM', i ).constraints.new(type='COPY_LOCATION')
     constr.target = armature
     constr.subtarget = subtarget
 
@@ -343,6 +343,7 @@ def add_control_bones(armature, pos, threshold, group_id):
             if (Vector(tail) - Vector(first_control)).length < threshold:
                 edbone.parent = get_bone(ed_bones, group_id, 'CTRL', 0)
 
+    # Add the handles
     for i, h in enumerate(handles):
         h_left, h_right = map(Vector, h)
         name_left = bname(i, role='handle', side='left')
@@ -356,17 +357,17 @@ def add_control_bones(armature, pos, threshold, group_id):
         edbone_left.parent = get_bone(ed_bones, group_id, 'CTRL', i)
         edbone_left.inherit_scale = 'NONE'
         edbone_left.rigged_stroke = group_id
-        edbone.bone_type = 'HANDLE_LEFT'
-        edbone.bone_order = i
+        edbone_left.bone_type = 'HANDLE_LEFT'
+        edbone_left.bone_order = i
 
         edbone_right.head = h_right
         edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
         edbone_right.use_deform = False
-        edbone_right.parent = get_bone(ed_bones, group_id, 'CTRL', i)
+        edbone_right.parent = get_bone(ed_bones, group_id, 'CTRL', i+1)
         edbone_right.inherit_scale = 'NONE'
         edbone_right.rigged_stroke = group_id
-        edbone.bone_type = 'HANDLE_RIGHT'
-        edbone.bone_order = i
+        edbone_right.bone_type = 'HANDLE_RIGHT'
+        edbone_right.bone_order = i
 
     bpy.ops.object.mode_set(mode='OBJECT')
     for i, p in enumerate(pos):

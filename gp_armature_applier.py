@@ -10,7 +10,7 @@ def remove_vertex_groups(gp_ob, group_id):
     Removes vertex groups from a a grease pencil object pertaining
     a bonegroup.
     """
-    for vgroup in gp_ob.vertex_groups[:]:
+    for vgroup in gp_ob.vertex_groups:
         if vgroup.bone_group == group_id:
             gp_ob.vertex_groups.remove(vgroup)
 
@@ -19,7 +19,7 @@ def remove_armature_mod(gp_ob, group_id):
     Remove armature modifier from a grease pencil object, pertaining
     a bonegroup
     """
-    for mod in gp_ob.grease_pencil_modifiers[:]:
+    for mod in gp_ob.grease_pencil_modifiers:
         vgroup = gp_ob.vertex_groups[mod.vertex_group]
         if vgroup.bone_group and vgroup.bone_group == group_id:
             gp_ob.grease_pencil_modifiers.remove(mod)
