@@ -125,7 +125,8 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
                 bpy.ops.gpencil.stroke_subdivide()
             bpy.ops.gpencil.select_all(action='DESELECT')
 
-        remove_vertex_groups(gp_ob, group_id) # vertex groups need to be rebuilt
+        # vertex groups need to be rebuilt    
+        remove_vertex_groups(gp_ob, group_id, is_resampling=True)
         
         armature = context.window_manager.gopo_prop_group.ob_armature
         add_vertex_groups(gp_ob,armature, bone_group=group_id )

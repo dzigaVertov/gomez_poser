@@ -5,15 +5,18 @@ from bpy.props import IntProperty
 from bpy.props import BoolProperty, PointerProperty, CollectionProperty, StringProperty
 from mathutils import Vector, Matrix
 
-def remove_vertex_groups(gp_ob, group_id):
+
+def remove_vertex_groups(gp_ob, group_id, is_resampling=False):
     """
     Removes vertex groups from a a grease pencil object pertaining
     a bonegroup.
     """
     for vgroup in gp_ob.vertex_groups:
-        if vgroup.bone_group == group_id:
+        included_group = (not is_resampling) or vgroup.deform_group
+        if vgroup.bone_group == group_id and included_group:
             gp_ob.vertex_groups.remove(vgroup)
 
+            
 def remove_armature_mod(gp_ob, group_id):
     """
     Remove armature modifier from a grease pencil object, pertaining
