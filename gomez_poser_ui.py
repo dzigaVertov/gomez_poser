@@ -52,7 +52,7 @@ def set_control_visibility(context, event):
     if not pbones:
         return
     ctrls_to_show = set(
-        pbone.bone.rigged_stroke for pbone in context.selected_pose_bones)
+        pbone.bone.rigged_stroke for pbone in pbones if pbone.bone.select)
 
     for pbone in pbones:
 
