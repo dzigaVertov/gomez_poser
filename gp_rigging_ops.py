@@ -329,7 +329,14 @@ def add_stretch_to(armature, subtarget_name, i, group_id):
     constr.subtarget = subtarget_name
     constr.keep_axis = 'SWING_Y'
 
+def center_of_mass(positions):
+    cm = positions[0].copy()
+    for p in positions[1:]:
+        cm += p
 
+    return cm / len(positions)
+
+    
 def add_control_bones(context, armature, pos, threshold, group_id):
     """
     Adds control and handle bones in pos positions pointing up (for now) - 
@@ -346,6 +353,16 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     context.view_layer.objects.active = armature
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
     ed_bones = armature.data.edit_bones
+
+    # sort of center of mass for root bone
+    root_pos = center_of_mass([p[0] for p in pos])
+    root_bone = ed_bones.new('root_' + str(group_id))
+    root_bone.head = root_pos
+    root_bone.tail = root_pos + Vector((0.0,0.0,1.0))
+    root_bone.use_deform = False
+    root_bone.rigged_stroke = group_id
+    root_bone.bone_type = 'ROOT'
+    root_bone.bone_order = 15
     
     # add the knots
     for i, p in enumerate(pos):
@@ -357,7 +374,8 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         edbone.use_deform = False
         edbone.rigged_stroke = group_id
         edbone.bone_type = 'CTRL'
-        edbone.bone_order = i 
+        edbone.bone_order = i
+        edbone.parent = root_bone
 
         # The tail of the last bone gets a knot
         if i == len(pos)-1:
@@ -373,6 +391,8 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             first_control, _ = pos[0]
             if (Vector(tail) - Vector(first_control)).length < threshold:
                 edbone.parent = get_bone(ed_bones, group_id, 'CTRL', 0)
+            else:
+                edbone.parent = root_bone
 
     # Add the handles
     for idx, handles in enumerate(transformed_handles):
@@ -421,13 +441,13 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     pose_bones = armature.pose.bones
     for pbone in pose_bones:
         rest_bone = pbone.bone
-        if rest_bone.bone_type == 'CTRL':
+        if rest_bone.bone_type in {'CTRL', 'ROOT'}:
             pbone.custom_shape = bpy.data.objects['ctrl_sphere']
-            pbone.custom_shape_scale = 0.025
+            pbone.custom_shape_scale = 0.025 if rest_bone.bone_type == 'CTRL' else 0.1
             rest_bone.layers[0] = True
             rest_bone.layers[-1] = False
             # TODO FIX this if bone has parent, hide it
-            if pbone.parent:
+            if rest_bone.parent and rest_bone.parent.bone_type=='CTRL':
                 rest_bone.hide = True
 
         if rest_bone.bone_type.startswith('HANDLE'):

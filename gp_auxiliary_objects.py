@@ -72,7 +72,7 @@ def add_auxiliary_meshes(context):
 
 def assure_auxiliary_objects(context):
     initialized = context.window_manager.gopo_prop_group.initialized
-    if initialized:
+    if initialized and context.view_layer.objects['ctrl_sphere']:
         return
 
     add_auxiliary_meshes(context)
