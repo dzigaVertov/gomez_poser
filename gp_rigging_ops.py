@@ -155,6 +155,17 @@ def get_bone_world_position(bone, armature):
     return arm_world_matrix @ bone.head_local, arm_world_matrix @ bone.tail_local
 
 
+def get_points_world_position(gp_ob, points):
+    """
+    Transform grease pencil points to world coordinates
+    """
+
+    gp_matrix = gp_ob.matrix_world
+    transformed_points = [gp_matrix @ pt.co for pt in points]
+
+    return transformed_points
+
+
 def calculate_points_indices_from_bones(context, stroke):
     """
     Returns the indices of the points in the stroke that constitute the
@@ -168,8 +179,9 @@ def calculate_points_indices_from_bones(context, stroke):
     size = len(stroke.points)
     kd = kdtree.KDTree(size)
 
-    for i, pt in enumerate(stroke.points):
-        kd.insert(pt.co, i)
+    transf_points = get_points_world_position(gp_ob, stroke.points)
+    for i, pt in enumerate(transf_points):
+        kd.insert(pt, i)
 
     kd.balance()
 
@@ -202,15 +214,33 @@ def get_points_indices(context, stroke):
     return points_indices
 
 
+def transform_bones_positions(context, bones_positions):
+    """
+    Takes the bones positions in gp_ob space.  Transforms them
+    to the correct edit bones positions in armature space
+    """
+    wm = context.window_manager
+    gp_props = wm.gopo_prop_group
+    gp_ob = gp_props.gp_ob
+    armature = gp_props.ob_armature
+    gp_mat = gp_ob.matrix_world
+    arm_mat_inv = armature.matrix_world.inverted()
+    transf_matrix = arm_mat_inv @ gp_mat
+
+    transformed_positions = [(transf_matrix @ Vector(i),
+                              transf_matrix @ Vector(j)) for i,j in bones_positions]
+    return transformed_positions
+
 def get_bones_positions(context):
     """
     Devuelve las posiciones de los 
     huesos a lo largo del stroke
     """
-    h_coefs = context.window_manager.fitted_bones
+    wm = context.window_manager
+    h_coefs = wm.fitted_bones
     bones_positions = [(i.bone_head, i.bone_tail) for i in h_coefs]
     ease = [(i.ease[0], i.ease[1]) for i in h_coefs]
-    return bones_positions, ease
+    return transform_bones_positions(context, bones_positions), ease
 
 
 def add_deform_bones(context, armature, pos, ease, group_id):
@@ -310,6 +340,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     """
     h_coefs = context.window_manager.fitted_bones
     handles = [(i.handle_l, i.handle_r) for i in h_coefs]
+    transformed_handles = transform_bones_positions(context, handles)
 
     armature.select_set(True)
     context.view_layer.objects.active = armature
@@ -344,30 +375,30 @@ def add_control_bones(context, armature, pos, threshold, group_id):
                 edbone.parent = get_bone(ed_bones, group_id, 'CTRL', 0)
 
     # Add the handles
-    for i, h in enumerate(handles):
-        h_left, h_right = map(Vector, h)
-        name_left = bname(context, i, role='handle', side='left')
-        name_right = bname(context, i, role='handle', side='right')
+    for idx, handles in enumerate(transformed_handles):
+        h_left, h_right =  handles
+        name_left = bname(context, idx, role='handle', side='left')
+        name_right = bname(context, idx, role='handle', side='right')
         edbone_left = ed_bones.new(name_left)
         edbone_right = ed_bones.new(name_right)
 
         edbone_left.head = h_left
         edbone_left.tail = h_left + Vector((0.0, 0.0, 1.0))
         edbone_left.use_deform = False
-        edbone_left.parent = get_bone(ed_bones, group_id, 'CTRL', i)
+        edbone_left.parent = get_bone(ed_bones, group_id, 'CTRL', idx)
         edbone_left.inherit_scale = 'NONE'
         edbone_left.rigged_stroke = group_id
         edbone_left.bone_type = 'HANDLE_LEFT'
-        edbone_left.bone_order = i
+        edbone_left.bone_order = idx
 
         edbone_right.head = h_right
         edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
         edbone_right.use_deform = False
-        edbone_right.parent = get_bone(ed_bones, group_id, 'CTRL', i+1)
+        edbone_right.parent = get_bone(ed_bones, group_id, 'CTRL', idx+1)
         edbone_right.inherit_scale = 'NONE'
         edbone_right.rigged_stroke = group_id
         edbone_right.bone_type = 'HANDLE_RIGHT'
-        edbone_right.bone_order = i
+        edbone_right.bone_order = idx
 
     bpy.ops.object.mode_set(mode='OBJECT')
     for i, p in enumerate(pos):

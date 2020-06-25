@@ -62,6 +62,9 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
                            description='The Grease Pencil object to resample')
 
     def get_stroke_to_resample(self, context, group_id, gp_ob=None):
+        """
+        Return the stroke with the correspoinding group_id
+        """
         if not gp_ob:
             gp_ob = context.window_manager.gopo_prop_group.gp_ob
         for layer in gp_ob.data.layers:
@@ -70,7 +73,11 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
                     if stroke.bone_groups == group_id:
                         return stroke
 
+                    
     def get_points_indices_for_subdivide(self, context, group_id):
+        """
+        Return the indices of the points 
+        """
         depsgraph = context.evaluated_depsgraph_get()
         gp_ob = context.window_manager.gopo_prop_group.gp_ob # self.gp_ob
         
@@ -80,6 +87,7 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
 
         point_pairs = zip(evald_stroke.points, evald_stroke.points[1:])
         indices = []
+        # TODO: Fix this - esto está mal. 
         max_dixt = (0,0)
         for idx, pair in enumerate(point_pairs):
             point_1, point_2 = pair
