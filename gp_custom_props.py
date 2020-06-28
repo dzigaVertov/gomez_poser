@@ -100,6 +100,8 @@ def register():
                                             description='Place that the bone occupies in a chain, starting from 0',
                                             default=-1)
 
+    bpy.types.GreasePencil.current_bone_group = IntProperty(default=0)
+
 def unregister():
     bpy.utils.unregister_class(FittedBone)
     bpy.utils.unregister_class(GopoProperties)
@@ -112,3 +114,4 @@ def unregister():
     del bpy.types.EditBone.bone_type
     del bpy.types.Bone.bone_order
     del bpy.types.EditBone.bone_order
+    del bpy.types.GreasePencil.current_bone_group
