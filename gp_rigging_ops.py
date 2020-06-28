@@ -83,7 +83,7 @@ def bname(context, i, role='deform', side=None):
     """
     Returns the name of a bone taking into account bone_group, role, index, and side
     """
-    bone_groups = context.window_manager.gopo_prop_group.current_bone_group
+    bone_groups = context.window_manager.gopo_prop_group.gp_ob.data.current_bone_group
     name = '_'.join(str(a)
                     for a in [role, side, bone_groups, i] if a is not None)
     return name
@@ -492,7 +492,7 @@ def add_vertex_groups(context, gp_ob, armature, bone_group=None):
     Add a vertex group for every deform bone
     """
     if not bone_group:
-        bone_group = context.window_manager.gopo_prop_group.current_bone_group
+        bone_group = gp_ob.data.current_bone_group
 
     name_base = 'deform_' + str(bone_group)
 
@@ -509,7 +509,7 @@ def add_weights(context, gp_ob, stroke, bone_group=None):
 
     """
     if not bone_group:
-        bone_group = context.window_manager.gopo_prop_group.current_bone_group
+        bone_group = gp_ob.data.current_bone_group
     name_base = 'deform_' + str(bone_group)
 
     indices = get_points_indices(context, stroke)
@@ -558,7 +558,7 @@ def prepare_interface(context, armature):
 def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshold):
 
     # Get and initialize stroke to be rigged
-    group_id = context.window_manager.gopo_prop_group.current_bone_group
+    group_id = gp_ob.data.current_bone_group
     stroke_index = get_stroke_index(context, gp_ob)
     stroke = gp_ob.data.layers.active.active_frame.strokes[stroke_index]
 
@@ -594,7 +594,7 @@ class Gomez_OT_Poser(bpy.types.Operator):
 
     def invoke(self, context, event):
         if context.object.type == 'GPENCIL':
-            context.window_manager.gopo_prop_group.current_bone_group += 1
+            context.window_manager.gopo_prop_group.gp_ob.data.current_bone_group += 1
             context.window_manager.gopo_prop_group.gp_ob = context.object
             self.error_threshold = context.window_manager.gopo_prop_group.error_threshold
             return self.execute(context)

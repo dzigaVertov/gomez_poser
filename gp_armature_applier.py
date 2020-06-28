@@ -81,7 +81,27 @@ def clean_gp_object(context, group_id):
     remove_stroke(gp_ob, group_id)
                 
 
+def clean_animation_data(context, action_groups):
+    """
+    Remove the action_groups from the active action in the armature
+    once the corresponding bones have been deleted.
+    """
+    armature = context.window_manager.gopo_prop_group.ob_armature
+    action = armature.animation_data.action
+
+    curves_to_remove = []
+    for curve in action.fcurves:
+        if curve.group.name in action_groups:
+            curves_to_remove.append(curve)
+
+    for curve in curves_to_remove:
+        action.fcurves.remove(curve)
+
+    
 def clean_bones(context,group_id):
+    """
+    Remove bones from baked stroke
+    """
     armature = context.window_manager.gopo_prop_group.ob_armature
     act_ob = context.object
     curr_mode = context.mode
@@ -91,13 +111,18 @@ def clean_bones(context,group_id):
     armature.hide_viewport = False
     bpy.ops.object.mode_set(mode='EDIT')
 
+    # Use this to remove the action groups
+    groups_names = []
     for edbone in armature.data.edit_bones:
         if edbone.rigged_stroke == group_id:
+            groups_names.append(edbone.name)
             armature.data.edit_bones.remove(edbone)
+            
 
     bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
     context.view_layer.objects.active = act_ob
     bpy.ops.object.mode_set(mode=curr_mode)
+    return groups_names
     
                     
 
@@ -126,8 +151,8 @@ class GOMEZ_OT_clean_baked(bpy.types.Operator):
 
         # clean_strokes(context, self.group_id)
         clean_gp_object(context, self.group_id)
-        clean_bones(context, self.group_id)
-
+        action_groups = clean_bones(context, self.group_id)
+        clean_animation_data(context, action_groups)
         return {'FINISHED'}
 
     @classmethod
