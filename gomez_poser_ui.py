@@ -169,7 +169,6 @@ class GomezPTPanel(bpy.types.Panel):
 
         layout.row().prop(addon_properties, 'error_threshold')
 
-        layout.row().prop(addon_properties, 'num_bendy')
 
         layout.row().prop(addon_properties,
                           'ob_armature',
