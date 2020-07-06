@@ -5,6 +5,19 @@ from bpy.props import IntProperty
 from bpy.props import BoolProperty, PointerProperty, CollectionProperty, StringProperty
 from mathutils import Vector, Matrix
 
+def can_remove_vg(gp_ob, vgroup):
+    """
+    Check if there are still strokes assigned to this vertex_group
+    """
+    # TODO: this can be easily optimized
+    for layer in gp_ob.data.layers:
+        for frame in layer.frames:
+            for stroke in frame.strokes:
+                for group in stroke.groups:
+                    if group == vgroup.index:
+                        return False
+    return True
+
 
 def remove_vertex_groups(gp_ob, group_id, is_resampling=False):
     """
@@ -12,20 +25,36 @@ def remove_vertex_groups(gp_ob, group_id, is_resampling=False):
     a bonegroup.
     """
     for vgroup in gp_ob.vertex_groups:
-        included_group = (not is_resampling) or vgroup.deform_group
+        included_group = ((not is_resampling) or vgroup.deform_group) and can_remove_vg(gp_ob,vgroup)
         if vgroup.bone_group == group_id and included_group:
             gp_ob.vertex_groups.remove(vgroup)
 
             
+def can_remove_mod(gp_ob, vgroup):
+    """
+    Check if there are still strokes affected by this modifier
+    """
+    for layer in gp_ob.data.layers:
+        for frame in layer.frames:
+            for stroke in frame.strokes:
+                for group in stroke.groups:
+                    if group == vgroup.index:
+                        return False
+    return True
+
+
 def remove_armature_mod(gp_ob, group_id):
     """
     Remove armature modifier from a grease pencil object, pertaining
-    a bonegroup
+    a bonegroup if it doesn't affect more strokes.
+    Returns True if it removes the modifier
     """
     for mod in gp_ob.grease_pencil_modifiers:
         vgroup = gp_ob.vertex_groups[mod.vertex_group]
-        if vgroup.bone_group and vgroup.bone_group == group_id:
+        # TODO: this could be easily optimized
+        if vgroup.bone_group and vgroup.bone_group == group_id and can_remove_mod(gp_ob,vgroup):
             gp_ob.grease_pencil_modifiers.remove(mod)
+            return True
 
 
 def remove_stroke(gp_ob, group_id):
@@ -53,33 +82,47 @@ def get_target_strokes(context):
     return set([stroke.bone_groups for stroke in all_strokes if stroke.select])
 
 
-def clean_strokes(context, group_id):
+def clean_strokes(context, group_id, init_frame, end_frame, layer_name='ALL'):
     """
-    Set all strokes from bonegroup group_id to no group
+    For all keyframes in gp_ob, between init_frame and end_frame, and all strokes
+    in those keyframes belonging to group_id, remove all weights from the points.  
     """
     prop_group = context.window_manager.gopo_prop_group
     gp_ob = prop_group.gp_ob
 
-    for layer in gp_ob.data.layers:
+    layers = gp_ob.data.layers if layer_name=='ALL' else [gp_ob.data.layers[layer_name]]
+    for layer in layers:
         for frame in layer.frames:
+            # TODO: check the case of active frame with frame_number < init_frame
+            f_number = frame.frame_number
+            if f_number < init_frame or f_number > end_frame:
+                continue
+            bpy.ops.gpencil.clean_keyframe(bone_group=group_id,
+                                           frame_number=f_number,
+                                           layer_name=layer.info)
             for stroke in frame.strokes:
                 if stroke.bone_groups == group_id:
                     stroke.bone_groups = 0
 
                     
-def clean_gp_object(context, group_id):
+def clean_gp_object(context, group_id, init_frame, end_frame):
     """
-    Remove all deform and armature vertex groups pertaining the group_id bone group.
-    Remove the corresponding armature modifier.
-    Remove the corresponding stroke
+    Remove all deform and armature vertex groups pertaining the group_id bone group if there are no more strokes being affected.
+    
+    Remove the corresponding armature modifier if there are no more strokes being affected.
+    
     """
     prop_group = context.window_manager.gopo_prop_group
     gp_ob = prop_group.gp_ob
 
-    remove_armature_mod(gp_ob, group_id)
+    # only if there are no more rigged_strokes in the group
+    group_removed = remove_armature_mod(gp_ob, group_id)
+    
     remove_vertex_groups(gp_ob, group_id)
+    # TODO: check when is this necessary
     remove_stroke(gp_ob, group_id)
-                
+    return group_removed
+
 
 def clean_animation_data(context, action_groups):
     """
@@ -89,6 +132,9 @@ def clean_animation_data(context, action_groups):
     armature = context.window_manager.gopo_prop_group.ob_armature
     action = armature.animation_data.action
 
+    if not action:
+        return
+    
     curves_to_remove = []
     for curve in action.fcurves:
         if curve.group.name in action_groups:
@@ -135,24 +181,46 @@ class GOMEZ_OT_clean_baked(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     group_id : IntProperty(name='bgroup', default=1)
+    init_frame : IntProperty(name='init_frame', default=1)
+    end_frame : IntProperty(name= 'end_frame', default=1)
+    layer_name : StringProperty(name='layer_name',
+                                description='The name of the layer to clean',
+                                default='',
+                                maxlen=64)
 
     def invoke(self, context, event):
         if context.mode == 'POSE' and context.active_pose_bone:
             self.group_id = context.active_pose_bone.rigged_stroke
         elif context.mode == 'EDIT_GPENCIL':
-            for stroke in context.object.data.layers.active.active_frame.strokes:
+            if self.layer_name == '':
+                layer = context.object.data.layers.active
+            else:
+                layer = context.object.data.layers[self.layer_name]
+            for stroke in layer.active_frame.strokes:
                 if stroke.select:
                     self.group_id = stroke.bone_groups
         return self.execute(context)
 
+    
     def execute(self, context):
-        if not self.group_id:
+        if not (self.group_id and self.init_frame and self.end_frame):
             return {'CANCELLED'}
 
-        # clean_strokes(context, self.group_id)
-        clean_gp_object(context, self.group_id)
-        action_groups = clean_bones(context, self.group_id)
-        clean_animation_data(context, action_groups)
+        if self.layer_name == '':
+            layer_name = context.object.data.layers.active.info
+        else:
+            layer_name = self.layer_name
+                
+        clean_strokes(context,
+                      self.group_id,
+                      self.init_frame,
+                      self.end_frame,
+                      layer_name=layer_name)
+        
+        removed_modifier = clean_gp_object(context, self.group_id, self.init_frame, self.end_frame)
+        if removed_modifier:
+            action_groups = clean_bones(context, self.group_id)
+            clean_animation_data(context, action_groups)
         return {'FINISHED'}
 
     @classmethod
@@ -178,21 +246,29 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
     frame_end : IntProperty(name='end frame',
                              description="the frame to stop applying the modifier",
                              default=1, min=0, max=1000000)
+
     step : IntProperty(name='frame_step',
                        description='step between baked steps',
                        default=1,
                        min=1,
                        max=1000000)
+
     bake_to_new_layer : BoolProperty(name='bake_to_new_layer',
                                      description='Bake the stroke to new layer',
                                      default=False)
 
+
+    split : BoolProperty(name='split',
+                         description='Split the stroke between a baked and a rigged part',
+                         default=False)
+    
+    
     
     def bake_stroke(self, context, gp_ob, gp_obeval, source_layer, target_layer, group_id):
         inf = self.frame_init
         outf = self.frame_end
         step = self.step
-
+        
         stroke = None
         for idx,st in enumerate(source_layer.active_frame.strokes):
             if st.bone_groups == group_id:
@@ -259,7 +335,8 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
         return self.execute(context)
 
 
-    def execute(self, context):        
+    def execute(self, context):
+        
 
         if context.mode =='POSE':
             bone_groups = set()
@@ -276,6 +353,11 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
         gp_obeval = gp_ob.evaluated_get(depsgraph)
         layer_to_bake = gp_ob.data.layers.active
 
+        kf_frame_number = layer_to_bake.active_frame.frame_number
+
+        if kf_frame_number < self.frame_init:
+            self.split = True
+        
         if self.bake_to_new_layer:
             layer = gp_ob.data.layers.new('baked_' + layer_to_bake.info , set_active=False)
         else:
@@ -283,7 +365,9 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
 
         for group_id in bone_groups:
             self.bake_stroke(context, gp_ob, gp_obeval,layer_to_bake, layer,  group_id)
-            bpy.ops.greasepencil.gp_clean_baked(group_id=group_id)
+            bpy.ops.greasepencil.gp_clean_baked(group_id=group_id,
+                                                init_frame=self.frame_init,
+                                                end_frame=self.frame_end)
 
         return {'FINISHED'}
 
