@@ -14,31 +14,55 @@ def can_remove_vg(gp_ob, vgroup):
         for frame in layer.frames:
             for stroke in frame.strokes:
                 for group in stroke.groups:
-                    if group == vgroup.index:
+
+                    if group.group == vgroup.index:
                         return False
     return True
 
 
-def remove_vertex_groups(gp_ob, group_id, is_resampling=False):
+def remove_vertex_groups(gp_ob, group_id, remove_bonegroup=False, is_resampling=False):
     """
     Removes vertex groups from a a grease pencil object pertaining
     a bonegroup.
+    Removes only deform_groups if we are not removing a bonegroup completely
+    (could be resampling)
     """
     for vgroup in gp_ob.vertex_groups:
-        included_group = ((not is_resampling) or vgroup.deform_group) and can_remove_vg(gp_ob,vgroup)
-        if vgroup.bone_group == group_id and included_group:
-            gp_ob.vertex_groups.remove(vgroup)
+        if vgroup.bone_group == group_id:
+            if remove_bonegroup:
+                gp_ob.vertex_groups.remove(vgroup)
+            elif is_resampling and vgroup.deform_group:
+                gp_ob.vertex_groups.remove(vgroup)
 
             
-def can_remove_mod(gp_ob, vgroup):
+def get_def_vgroup(gp_ob, group_id):
+    """
+    Return the vertex group corresponding to the group_id 
+    (The vertex group that the armature modifier is applied to)
+    """
+    for mod in gp_ob.grease_pencil_modifiers:
+        vgroup = gp_ob.vertex_groups[mod.vertex_group]
+
+        if vgroup.bone_group and vgroup.bone_group == group_id:
+            return vgroup
+
+            
+def are_we_removing_bonegroup(context, group_id):
     """
     Check if there are still strokes affected by this modifier
     """
+    prop_group = context.window_manager.gopo_prop_group
+    gp_ob = prop_group.gp_ob
+    vgroup = get_def_vgroup(gp_ob, group_id)
+
+    if not vgroup:
+        return False
+    
     for layer in gp_ob.data.layers:
         for frame in layer.frames:
             for stroke in frame.strokes:
                 for group in stroke.groups:
-                    if group == vgroup.index:
+                    if group.group == vgroup.index:
                         return False
     return True
 
@@ -51,8 +75,8 @@ def remove_armature_mod(gp_ob, group_id):
     """
     for mod in gp_ob.grease_pencil_modifiers:
         vgroup = gp_ob.vertex_groups[mod.vertex_group]
-        # TODO: this could be easily optimized
-        if vgroup.bone_group and vgroup.bone_group == group_id and can_remove_mod(gp_ob,vgroup):
+
+        if vgroup.bone_group and vgroup.bone_group == group_id:
             gp_ob.grease_pencil_modifiers.remove(mod)
             return True
 
@@ -105,7 +129,7 @@ def clean_strokes(context, group_id, init_frame, end_frame, layer_name='ALL'):
                     stroke.bone_groups = 0
 
                     
-def clean_gp_object(context, group_id, init_frame, end_frame):
+def clean_gp_object(context, group_id, init_frame, end_frame, remove_bonegroup):
     """
     Remove all deform and armature vertex groups pertaining the group_id bone group if there are no more strokes being affected.
     
@@ -115,13 +139,13 @@ def clean_gp_object(context, group_id, init_frame, end_frame):
     prop_group = context.window_manager.gopo_prop_group
     gp_ob = prop_group.gp_ob
 
-    # only if there are no more rigged_strokes in the group
-    group_removed = remove_armature_mod(gp_ob, group_id)
+    if remove_bonegroup:
+        remove_armature_mod(gp_ob, group_id)
     
-    remove_vertex_groups(gp_ob, group_id)
+    remove_vertex_groups(gp_ob, group_id, remove_bonegroup=remove_bonegroup)
     # TODO: check when is this necessary
-    remove_stroke(gp_ob, group_id)
-    return group_removed
+    #remove_stroke(gp_ob, group_id)
+    
 
 
 def clean_animation_data(context, action_groups):
@@ -216,9 +240,15 @@ class GOMEZ_OT_clean_baked(bpy.types.Operator):
                       self.init_frame,
                       self.end_frame,
                       layer_name=layer_name)
+
+        remove_bone_group = are_we_removing_bonegroup(context, self.group_id)
         
-        removed_modifier = clean_gp_object(context, self.group_id, self.init_frame, self.end_frame)
-        if removed_modifier:
+        clean_gp_object(context,
+                        self.group_id,
+                        self.init_frame,
+                        self.end_frame,
+                        remove_bone_group)
+        if remove_bone_group:
             action_groups = clean_bones(context, self.group_id)
             clean_animation_data(context, action_groups)
         return {'FINISHED'}
