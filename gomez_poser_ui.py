@@ -56,8 +56,8 @@ def set_control_visibility(context, event):
 
     for pbone in pbones:
 
-        ctrl_bone = pbone.name.startswith('ctrl')
-        handle_bone = pbone.name.startswith('handle')
+        ctrl_bone = pbone.bone.bone_type == 'CTRL'
+        handle_bone = pbone.bone.bone_type.startswith('HANDLE')
 
         if (ctrl_bone or handle_bone) and pbone.bone.rigged_stroke in ctrls_to_show:
             pbone.bone.layers[0] = True
@@ -184,8 +184,11 @@ class GomezPTPanel(bpy.types.Panel):
 
         layout.column()
 
-        layout.row().prop(addon_properties, 'frame_init')
-        layout.row().prop(addon_properties, 'frame_end')
+        hide_frame_range = addon_properties.bake_from_active_to_current
+
+        if not hide_frame_range:
+            layout.row().prop(addon_properties, 'frame_init')
+            layout.row().prop(addon_properties, 'frame_end')
         layout.row().prop(addon_properties, 'bake_step')
         layout.row().prop(addon_properties, 'bake_to_new_layer')
         layout.row().prop(addon_properties, 'bake_from_active_to_current')
@@ -211,6 +214,8 @@ def register():
             'greasepencil.go_pose', type='L', value='PRESS', shift=True)
         kmll = km.keymap_items.new(
             'armature.select_all_ctrls', type='L', value='PRESS', shift=True, ctrl=True)
+        kmla = km.keymap_items.new(
+            'armature.select_bonegroup', type='L', value='PRESS', shift=False, ctrl=True)
         kmrr = km.keymap_items.new(
             'greasepencil.resample_rigged', type='R', value='PRESS',shift=True,  ctrl=True)
         kmbb = km.keymap_items.new(
@@ -220,6 +225,7 @@ def register():
         addon_keymaps.append((km, kmj))
         addon_keymaps.append((km, kml))
         addon_keymaps.append((km, kmll))
+        addon_keymaps.append((km, kmla))
         addon_keymaps.append((km, kmrr))
         addon_keymaps.append((km, kmbb))
 

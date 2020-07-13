@@ -431,10 +431,9 @@ class GOMEZ_OT_select_all_stroke_ctrls(bpy.types.Operator):
         indices = [bone.rigged_stroke for bone in armature.data.bones if bone.select]
 
         for bone in armature.data.bones:
-            if bone.name.startswith('ctrl') and bone.rigged_stroke in indices:
+            if bone.bone_type.startswith('CTRL') and bone.rigged_stroke in indices:
                 bone.select = True
         return {'FINISHED'}
-
     
     @classmethod
     def poll(cls, context):
@@ -442,6 +441,27 @@ class GOMEZ_OT_select_all_stroke_ctrls(bpy.types.Operator):
         return armature and context.mode == 'POSE' 
         
 
+class GOMEZ_OT_select_bonegroup(bpy.types.Operator):
+    bl_idname = 'armature.select_bonegroup'
+    bl_label = 'Select all bones of a given stroke'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        armature = context.object
+        indices = [bone.rigged_stroke for bone in armature.data.bones if bone.select]
+
+        bone_types = {'DEFORM', 'CTRL', 'HANDLE_LEFT', 'HANDLE_RIGHT', 'ROOT'}
+
+        for bone in armature.data.bones:
+            if bone.bone_type in bone_types and bone.rigged_stroke in indices:
+                bone.select = True
+        return {'FINISHED'}
+    
+    @classmethod
+    def poll(cls, context):
+        armature = context.window_manager.gopo_prop_group.ob_armature
+        return armature and context.mode == 'POSE' 
+        
         
 
         
@@ -451,11 +471,13 @@ def register():
     bpy.utils.register_class(GOMEZ_OT_bake_animation)
     bpy.utils.register_class(GOMEZ_OT_clean_baked)
     bpy.utils.register_class(GOMEZ_OT_select_all_stroke_ctrls)
+    bpy.utils.register_class(GOMEZ_OT_select_bonegroup)
 
 def unregister():
     bpy.utils.unregister_class(GOMEZ_OT_bake_animation)
     bpy.utils.unregister_class(GOMEZ_OT_clean_baked)
     bpy.utils.unregister_class(GOMEZ_OT_select_all_stroke_ctrls)
+    bpy.utils.unregister_class(GOMEZ_OT_select_bonegroup)
 
         
     
