@@ -583,7 +583,7 @@ def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshol
 
 class Gomez_OT_Poser(bpy.types.Operator):
     """
-    Rig a grease pencil stroke
+    Rig a grease pencil strokep
     """
     bl_idname = "greasepencil.poser"
     bl_label = "Rig Stroke"

@@ -314,6 +314,7 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
         # First get the points.
         baked_points = dict()
 
+        
         for fr in range(inf, outf+1, step):
             context.scene.frame_set(fr)
 
@@ -395,6 +396,8 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
 
         for group_id in bone_groups:
             self.bake_stroke(context, gp_ob, gp_obeval,layer_to_bake, layer,  group_id)
+
+        for group_id in bone_groups:
             bpy.ops.greasepencil.gp_clean_baked(group_id=group_id,
                                                 init_frame=self.frame_init,
                                                 end_frame=self.frame_end)

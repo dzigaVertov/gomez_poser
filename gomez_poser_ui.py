@@ -63,7 +63,7 @@ def set_control_visibility(context, event):
             pbone.bone.layers[0] = True
             pbone.bone.layers[3] = True
         elif (ctrl_bone or handle_bone):
-            pbone.bone.layers[0] = event.shift
+            pbone.bone.layers[0] = event.alt
             pbone.bone.layers[3] = True
 
 
@@ -215,7 +215,7 @@ def register():
         kmll = km.keymap_items.new(
             'armature.select_all_ctrls', type='L', value='PRESS', shift=True, ctrl=True)
         kmla = km.keymap_items.new(
-            'armature.select_bonegroup', type='L', value='PRESS', shift=False, ctrl=True)
+            'armature.select_bonegroup', type='PERIOD', value='PRESS', shift=True, ctrl=True)
         kmrr = km.keymap_items.new(
             'greasepencil.resample_rigged', type='R', value='PRESS',shift=True,  ctrl=True)
         kmbb = km.keymap_items.new(
