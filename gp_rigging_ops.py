@@ -23,11 +23,29 @@ from bpy.props import FloatProperty, IntProperty, FloatVectorProperty, BoolPrope
 from . import gp_auxiliary_objects
 
 
+def is_bone_type(bone, bonetype):
+
+    if bonetype == 'CTRL':
+        return bone.poser_control
+    if bonetype == 'DEFORM':
+        return bone.poser_deform
+    if bonetype == 'ROOT':
+        return bone.poser_root
+    if bonetype == 'HANDLE_LEFT':
+        return bone.poser_lhandle
+    if bonetype == 'HANDLE_RIGHT':
+        return bone.poser_rhandle
+    
+
+
 def get_bone(bones, rigged_stroke, bone_type, bone_order):
-   
     for b in bones:
         databone = b.bone if type(b) == bpy.types.PoseBone else b
-        if databone.rigged_stroke == rigged_stroke and databone.bone_type==bone_type and databone.bone_order == bone_order:
+        
+        if databone.rigged_stroke == rigged_stroke \
+           and is_bone_type(databone, bone_type) \
+           and databone.bone_order == bone_order:
+                   
             return b
 
 
@@ -272,7 +290,7 @@ def add_deform_bones(context, armature, pos, ease, group_id):
         edbone.bbone_easein = ease_in
         edbone.bbone_easeout = ease_out
         edbone.rigged_stroke = group_id
-        edbone.bone_type = 'DEFORM'
+        edbone.poser_deform = True
         edbone.bone_order = i
 
         if i > 0:
@@ -284,7 +302,7 @@ def add_deform_bones(context, armature, pos, ease, group_id):
 
     bpy.ops.object.mode_set(mode='OBJECT')
     for bone in armature.data.bones:
-        if bone.bone_type == 'DEFORM':
+        if bone.poser_deform:
             bone.layers[-1] = True
             bone.layers[0] = False
 
@@ -361,7 +379,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     root_bone.tail = root_pos + Vector((0.0,0.0,1.0))
     root_bone.use_deform = False
     root_bone.rigged_stroke = group_id
-    root_bone.bone_type = 'ROOT'
+    root_bone.poser_root = True
     root_bone.bone_order = 15
     
     # add the knots
@@ -373,7 +391,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         edbone.tail = Vector(ctrl) + Vector((0.0, 0.0, 1.0))
         edbone.use_deform = False
         edbone.rigged_stroke = group_id
-        edbone.bone_type = 'CTRL'
+        edbone.poser_control = True
         edbone.bone_order = i
         edbone.parent = root_bone
 
@@ -385,7 +403,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             edbone.tail = Vector(tail) + Vector((0.0, 0.0, 1.0))
             edbone.use_deform = False
             edbone.rigged_stroke = group_id
-            edbone.bone_type = 'CTRL'
+            edbone.poser_control = True
             edbone.bone_order = i+1
             # check if it's closed_stroke
             first_control, _ = pos[0]
@@ -408,7 +426,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         edbone_left.parent = get_bone(ed_bones, group_id, 'CTRL', idx)
         edbone_left.inherit_scale = 'NONE'
         edbone_left.rigged_stroke = group_id
-        edbone_left.bone_type = 'HANDLE_LEFT'
+        edbone_left.poser_lhandle = True
         edbone_left.bone_order = idx
 
         edbone_right.head = h_right
@@ -417,7 +435,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         edbone_right.parent = get_bone(ed_bones, group_id, 'CTRL', idx+1)
         edbone_right.inherit_scale = 'NONE'
         edbone_right.rigged_stroke = group_id
-        edbone_right.bone_type = 'HANDLE_RIGHT'
+        edbone_right.poser_rhandle = True
         edbone_right.bone_order = idx
 
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -441,16 +459,16 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     pose_bones = armature.pose.bones
     for pbone in pose_bones:
         rest_bone = pbone.bone
-        if rest_bone.bone_type in {'CTRL', 'ROOT'}:
+        if rest_bone.poser_control or rest_bone.poser_root:
             pbone.custom_shape = bpy.data.objects['ctrl_sphere']
-            pbone.custom_shape_scale = 0.025 if rest_bone.bone_type == 'CTRL' else 0.1
+            pbone.custom_shape_scale = 0.025 if rest_bone.poser_control else 0.1
             rest_bone.layers[0] = True
             rest_bone.layers[-1] = False
             # TODO FIX this if bone has parent, hide it
-            if rest_bone.parent and rest_bone.parent.bone_type=='CTRL':
+            if rest_bone.parent and rest_bone.parent.poser_control:
                 rest_bone.hide = True
 
-        if rest_bone.bone_type.startswith('HANDLE'):
+        if rest_bone.poser_handle:
             pbone.custom_shape = bpy.data.objects['ctrl_cone']
             pbone.custom_shape_scale = 0.01
             rest_bone.show_wire = True

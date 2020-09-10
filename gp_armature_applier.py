@@ -434,7 +434,7 @@ class GOMEZ_OT_select_all_stroke_ctrls(bpy.types.Operator):
         indices = [bone.rigged_stroke for bone in armature.data.bones if bone.select]
 
         for bone in armature.data.bones:
-            if bone.bone_type.startswith('CTRL') and bone.rigged_stroke in indices:
+            if bone.poser_control and bone.rigged_stroke in indices:
                 bone.select = True
         return {'FINISHED'}
     
@@ -453,10 +453,13 @@ class GOMEZ_OT_select_bonegroup(bpy.types.Operator):
         armature = context.object
         indices = [bone.rigged_stroke for bone in armature.data.bones if bone.select]
 
-        bone_types = {'DEFORM', 'CTRL', 'HANDLE_LEFT', 'HANDLE_RIGHT', 'ROOT'}
-
         for bone in armature.data.bones:
-            if bone.bone_type in bone_types and bone.rigged_stroke in indices:
+            poser_bone = any(bone.poser_control,
+                             bone.poser_handle,
+                             bone.poser_root,
+                             bone.poser_deform)
+            
+            if poser_bone and bone.rigged_stroke in indices:
                 bone.select = True
         return {'FINISHED'}
     

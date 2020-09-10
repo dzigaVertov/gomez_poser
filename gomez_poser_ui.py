@@ -56,8 +56,8 @@ def set_control_visibility(context, event):
 
     for pbone in pbones:
 
-        ctrl_bone = pbone.bone.bone_type == 'CTRL'
-        handle_bone = pbone.bone.bone_type.startswith('HANDLE')
+        ctrl_bone = pbone.bone.poser_control
+        handle_bone = pbone.bone.poser_handle
 
         if (ctrl_bone or handle_bone) and pbone.bone.rigged_stroke in ctrls_to_show:
             pbone.bone.layers[0] = True
