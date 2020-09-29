@@ -372,7 +372,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
     ed_bones = armature.data.edit_bones
 
-    # sort of center of mass for root bone
+    # Center of mass for root bone
     root_pos = center_of_mass([p[0] for p in pos])
     root_bone = ed_bones.new('root_' + str(group_id))
     root_bone.head = root_pos
@@ -383,6 +383,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     root_bone.bone_order = 15
     
     # add the knots
+    prev_control = None
     for i, p in enumerate(pos):
         name = bname(context, i, role='ctrl_stroke')
         ctrl, tail = p
@@ -395,6 +396,12 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         edbone.bone_order = i
         edbone.parent = root_bone
 
+        if prev_control:
+            edbone.bbone_custom_handle_start = prev_control
+            prev_control.bbone_custom_handle_end = edbone
+
+        prev_control = edbone
+        
         # The tail of the last bone gets a knot
         if i == len(pos)-1:
             name = bname(context, i+1, role='ctrl_stroke')
@@ -411,6 +418,13 @@ def add_control_bones(context, armature, pos, threshold, group_id):
                 edbone.parent = get_bone(ed_bones, group_id, 'CTRL', 0)
             else:
                 edbone.parent = root_bone
+
+            edbone.bbone_custom_handle_start = prev_control
+            prev_control.bbone_custom_handle_end = edbone
+
+            
+
+        
 
     # Add the handles
     for idx, handles in enumerate(transformed_handles):
@@ -575,6 +589,8 @@ def prepare_interface(context, armature):
 
 def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshold):
 
+    armature.data.is_gposer_armature = True
+    
     # Get and initialize stroke to be rigged
     group_id = gp_ob.data.current_bone_group
     stroke_index = get_stroke_index(context, gp_ob)

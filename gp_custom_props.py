@@ -87,12 +87,6 @@ def register():
                                                    description='id of linked stroke',
                                                    default=0)
 
-    bpy.types.Bone.bone_type = StringProperty(name='bone_type',
-                                              description='Describes the use given to the bone by the addon, either DEFORM, CTRL, HANDLE_LEFT, HANDLE_RIGHT or ROOT',
-                                              default='')
-    bpy.types.EditBone.bone_type = StringProperty(name='bone_type',
-                                                  description='Describes the use given to the bone by the addon, either DEFORM, CTRL, HANDLE_LEFT, HANDLE_RIGHT or ROOT',
-                                                  default='')
     bpy.types.Bone.bone_order = IntProperty(name='bone_order',
                                             description='Place that the bone occupies in a chain, starting from 0',
                                             default=-1)
@@ -110,8 +104,6 @@ def unregister():
     del bpy.types.WindowManager.fitted_bones
     del bpy.types.Bone.rigged_stroke
     del bpy.types.EditBone.rigged_stroke
-    del bpy.types.Bone.bone_type
-    del bpy.types.EditBone.bone_type
     del bpy.types.Bone.bone_order
     del bpy.types.EditBone.bone_order
     del bpy.types.GreasePencil.current_bone_group
