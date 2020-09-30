@@ -50,52 +50,54 @@ def get_bone(bones, rigged_stroke, bone_type, bone_order):
             return b
 
 
-def add_driver(context, i, def_bone, handle_left, handle_right, group_id):
+def add_driver(context, i, def_bone, handle_start, handle_end, group_id):
     ''' Add drivers to ease properties of deform bone '''
     
     num_bones = context.window_manager.gopo_prop_group.num_bones
     armature = context.window_manager.gopo_prop_group.ob_armature
-
-    # distances in editmode
-    # TODO: this looks dangerous: the bones passed to this function are posebones
-    edit_distance_handle_left = (handle_left.head - def_bone.head).length
-    edit_distance_handle_right = (handle_right.head - def_bone.tail).length
-
-    # ease out
     deform_name = def_bone.name
-    ctrl_bone = get_bone(armature.pose.bones, group_id, 'CTRL', i+1 )
-    path_ease_out = f'pose.bones[\"{deform_name}\"].bbone_easeout'
-    edit_easeout = armature.data.bones[deform_name].bbone_easeout
 
-    # ease in
-    path_ease_in = f'pose.bones[\"{deform_name}\"].bbone_easein'
-    edit_easein = armature.data.bones[deform_name].bbone_easein
 
-    # add driver easein
-    driver = armature.driver_add(path_ease_in).driver
-    variable = driver.variables.new()
-    variable.type = 'LOC_DIFF'
-    variable.name = 'varname'
-    variable.targets[0].id = armature
-    variable.targets[0].bone_target = def_bone.name
-    variable.targets[1].id = armature
-    variable.targets[1].bone_target = handle_left.name
+    # TODO: this looks dangerous: the bones passed to this function are posebones
+    # distance in editmode
+    if handle_start:
+        edit_distance_handle_start = (handle_start.head - def_bone.head).length
+    
+        # ease in
+        path_ease_in = f'pose.bones[\"{deform_name}\"].bbone_easein'
+        edit_easein = armature.data.bones[deform_name].bbone_easein
 
-    driver.expression = f'(varname-{edit_distance_handle_left})*{edit_easein}/{edit_distance_handle_left} '
+        # add driver easein
+        driver = armature.driver_add(path_ease_in).driver
+        variable = driver.variables.new()
+        variable.type = 'LOC_DIFF'
+        variable.name = 'varname'
+        variable.targets[0].id = armature
+        variable.targets[0].bone_target = def_bone.name
+        variable.targets[1].id = armature
+        variable.targets[1].bone_target = handle_start.name
 
-    # add driver easeout
-    # we need the control bone for this one
+        driver.expression = f'(varname-{edit_distance_handle_start})*{edit_easein}/{edit_distance_handle_start} '
 
-    driver = armature.driver_add(path_ease_out).driver
-    variable = driver.variables.new()
-    variable.type = 'LOC_DIFF'
-    variable.name = 'varname'
-    variable.targets[0].id = armature
-    variable.targets[0].bone_target = ctrl_bone.name
-    variable.targets[1].id = armature
-    variable.targets[1].bone_target = handle_right.name
+    if handle_end:
+        edit_distance_handle_end = (handle_end.head - def_bone.tail).length
+        # ease out
+        ctrl_bone = get_bone(armature.pose.bones, group_id, 'CTRL', i+1 )
+        path_ease_out = f'pose.bones[\"{deform_name}\"].bbone_easeout'
+        edit_easeout = armature.data.bones[deform_name].bbone_easeout
 
-    driver.expression = f'(varname-{edit_distance_handle_left})*{edit_easein}/{edit_distance_handle_left} '
+        # add driver easeout
+        driver = armature.driver_add(path_ease_out).driver
+        variable = driver.variables.new()
+        variable.type = 'LOC_DIFF'
+        variable.name = 'varname'
+        variable.targets[0].id = armature
+        variable.targets[0].bone_target = ctrl_bone.name
+        variable.targets[1].id = armature
+        variable.targets[1].bone_target = handle_end.name
+
+        driver.expression = f'(varname-{edit_distance_handle_end})*{edit_easeout}/{edit_distance_handle_end} '
+
 
 
 def bname(context, i, role='deform', side=None):
@@ -118,9 +120,9 @@ def rig_ease(context, armature, i, group_id):
     if i < num_bones:
         # ease in
         def_bone = get_bone(armature.pose.bones, group_id, 'DEFORM', i)  
-        handle_left = get_bone(armature.pose.bones, group_id, 'HANDLE_LEFT', i)  
-        handle_right = get_bone(armature.pose.bones, group_id, 'HANDLE_RIGHT', i)  
-        add_driver(context, i, def_bone, handle_left, handle_right, group_id)
+        handle_start = get_bone(armature.pose.bones, group_id, 'HANDLE_RIGHT', i)  
+        handle_end = get_bone(armature.pose.bones, group_id, 'HANDLE_LEFT', i)  
+        add_driver(context, i, def_bone, handle_start, handle_end, group_id)
 
 
 def get_stroke_index(context, gp_ob):
@@ -314,11 +316,11 @@ def add_handles(context, armature, i, group_id):
     """
     bones = armature.data.bones
     def_bone = get_bone(bones, group_id, 'DEFORM', i )
-    handle_left = get_bone(bones, group_id, 'HANDLE_LEFT', i )
-    handle_right = get_bone(bones, group_id, 'HANDLE_RIGHT', i )
-    def_bone.bbone_custom_handle_start = handle_left
+    handle_start = get_bone(bones, group_id, 'HANDLE_RIGHT', i )
+    handle_end = get_bone(bones, group_id, 'HANDLE_LEFT', i )
+    def_bone.bbone_custom_handle_start = handle_start
     def_bone.bbone_handle_type_start = 'ABSOLUTE'
-    def_bone.bbone_custom_handle_end = handle_right
+    def_bone.bbone_custom_handle_end = handle_end
     def_bone.bbone_handle_type_end = 'ABSOLUTE'
 
     rig_ease(context, armature, i, group_id)
@@ -373,7 +375,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
 
     handles = [None] + handles + [None]
 
-    handles = [(i,j) for i,j in zip(handles[:-1], handles[1:])]
+    handles = list(zip(handles[::2], handles[1::2]))
     
     transformed_handles = transform_bones_positions(context, handles)
 
@@ -441,8 +443,11 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         handles, ctrl_bone  = handles_and_controls
         h_left, h_right =  handles
 
+        # TODO: find a simpler approach
+        # Bone order is given by rigged segment.  Control bone has same bone order as it's right handle;
+        # but one more than it's left handle
         if h_left:
-            name_left = bname(context, idx, role='handle', side='left')
+            name_left = bname(context, idx-1, role='handle', side='left')
             edbone_left = ed_bones.new(name_left)
             ctrl_bone.gp_lhandle = edbone_left
             edbone_left.head = h_left
@@ -452,7 +457,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             edbone_left.inherit_scale = 'NONE'
             edbone_left.rigged_stroke = group_id
             edbone_left.poser_lhandle = True
-            edbone_left.bone_order = idx
+            edbone_left.bone_order = idx-1
 
         if h_right:
             name_right = bname(context, idx, role='handle', side='right')
@@ -468,8 +473,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             edbone_right.bone_order = idx
 
     bpy.ops.object.mode_set(mode='OBJECT')
-    for i, p in enumerate(pos):
-        bone = get_bone(armature.data.bones, group_id, 'CTRL', i)
+    for i, bone in enumerate(ctrl_bones[:-1]):
         name = bone.name
         
         # adding constraints
@@ -483,7 +487,6 @@ def add_control_bones(context, armature, pos, threshold, group_id):
 
         # setting handles
         add_handles(context, armature, i, group_id)
-    # for the last control bone
 
     pose_bones = armature.pose.bones
     for pbone in pose_bones:
