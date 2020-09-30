@@ -109,7 +109,7 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         armature = context.window_manager.gopo_prop_group.ob_armature
-        if  (context.space_data.type == 'VIEW3D') and (context.mode == 'PAINT_GPENCIL') and armature:
+        if  (context.space_data.type == 'VIEW_3D') and (context.mode == 'PAINT_GPENCIL') and armature:
             return True
         else:
             return False
@@ -143,7 +143,7 @@ class GOMEZ_OT_go_draw(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         gp_ob = context.window_manager.gopo_prop_group.gp_ob
-        if (context.space_data.type == 'VIEW3D') and (context.mode == 'POSE') and gp_ob:
+        if (context.space_data.type == 'VIEW_3D') and (context.mode == 'POSE') and gp_ob:
             return True
         else:
             return False
