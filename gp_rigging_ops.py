@@ -19,6 +19,7 @@ Created by Marcelo Demian Gómez
 '''
 import bpy
 from mathutils import Vector, Matrix, kdtree
+
 from bpy.props import FloatProperty, IntProperty, FloatVectorProperty, BoolProperty, PointerProperty, CollectionProperty, StringProperty
 from . import gp_auxiliary_objects
 
@@ -245,8 +246,8 @@ def transform_bones_positions(context, bones_positions):
     arm_mat_inv = armature.matrix_world.inverted()
     transf_matrix = arm_mat_inv @ gp_mat
 
-    transformed_positions = [(transf_matrix @ Vector(i),
-                              transf_matrix @ Vector(j)) for i,j in bones_positions]
+    transformed_positions = [(transf_matrix @ Vector(i) if i else None,
+                              transf_matrix @ Vector(j) if j else None) for i,j in bones_positions]
     return transformed_positions
 
 def get_bones_positions(context):
@@ -363,8 +364,17 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     Adds custom shapes - Puts control bones in first layer.
     Hides handle bones
     """
+    # TODO: fix the original alignement bug - we where misassigning the handles
     h_coefs = context.window_manager.fitted_bones
-    handles = [(i.handle_l, i.handle_r) for i in h_coefs]
+    handles = []
+    for i in h_coefs:
+        handles.append(i.handle_l)
+        handles.append(i.handle_r)
+
+    handles = [None] + handles + [None]
+
+    handles = [(i,j) for i,j in zip(handles[:-1], handles[1:])]
+    
     transformed_handles = transform_bones_positions(context, handles)
 
     armature.select_set(True)
@@ -430,31 +440,32 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     for idx, handles_and_controls in enumerate(zip(transformed_handles, ctrl_bones)):
         handles, ctrl_bone  = handles_and_controls
         h_left, h_right =  handles
-        name_left = bname(context, idx, role='handle', side='left')
-        name_right = bname(context, idx, role='handle', side='right')
-        edbone_left = ed_bones.new(name_left)
-        edbone_right = ed_bones.new(name_right)
-        ctrl_bone.gp_lhandle = edbone_left
-        ctrl_bone.gp_rhandle = edbone_right
 
-        
-        edbone_left.head = h_left
-        edbone_left.tail = h_left + Vector((0.0, 0.0, 1.0))
-        edbone_left.use_deform = False
-        #edbone_left.parent = root_bone
-        edbone_left.inherit_scale = 'NONE'
-        edbone_left.rigged_stroke = group_id
-        edbone_left.poser_lhandle = True
-        edbone_left.bone_order = idx
+        if h_left:
+            name_left = bname(context, idx, role='handle', side='left')
+            edbone_left = ed_bones.new(name_left)
+            ctrl_bone.gp_lhandle = edbone_left
+            edbone_left.head = h_left
+            edbone_left.tail = h_left + Vector((0.0, 0.0, 1.0))
+            edbone_left.use_deform = False
+            #edbone_left.parent = root_bone
+            edbone_left.inherit_scale = 'NONE'
+            edbone_left.rigged_stroke = group_id
+            edbone_left.poser_lhandle = True
+            edbone_left.bone_order = idx
 
-        edbone_right.head = h_right
-        edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
-        edbone_right.use_deform = False
-        #edbone_right.parent = root_bone
-        edbone_right.inherit_scale = 'NONE'
-        edbone_right.rigged_stroke = group_id
-        edbone_right.poser_rhandle = True
-        edbone_right.bone_order = idx
+        if h_right:
+            name_right = bname(context, idx, role='handle', side='right')
+            edbone_right = ed_bones.new(name_right)
+            ctrl_bone.gp_rhandle = edbone_right
+            edbone_right.head = h_right
+            edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
+            edbone_right.use_deform = False
+            #edbone_right.parent = root_bone
+            edbone_right.inherit_scale = 'NONE'
+            edbone_right.rigged_stroke = group_id
+            edbone_right.poser_rhandle = True
+            edbone_right.bone_order = idx
 
     bpy.ops.object.mode_set(mode='OBJECT')
     for i, p in enumerate(pos):
