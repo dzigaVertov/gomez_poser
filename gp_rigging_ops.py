@@ -384,6 +384,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     
     # add the knots
     prev_control = None
+    ctrl_bones = [] # Keep to pass to the handles ordered by bone_order
     for i, p in enumerate(pos):
         name = bname(context, i, role='ctrl_stroke')
         ctrl, tail = p
@@ -395,6 +396,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         edbone.poser_control = True
         edbone.bone_order = i
         edbone.parent = root_bone
+        ctrl_bones.append(edbone)
 
         if prev_control:
             edbone.bbone_custom_handle_start = prev_control
@@ -421,23 +423,25 @@ def add_control_bones(context, armature, pos, threshold, group_id):
 
             edbone.bbone_custom_handle_start = prev_control
             prev_control.bbone_custom_handle_end = edbone
-
+            ctrl_bones.append(edbone)
             
 
-        
-
     # Add the handles
-    for idx, handles in enumerate(transformed_handles):
+    for idx, handles_and_controls in enumerate(zip(transformed_handles, ctrl_bones)):
+        handles, ctrl_bone  = handles_and_controls
         h_left, h_right =  handles
         name_left = bname(context, idx, role='handle', side='left')
         name_right = bname(context, idx, role='handle', side='right')
         edbone_left = ed_bones.new(name_left)
         edbone_right = ed_bones.new(name_right)
+        ctrl_bone.gp_lhandle = edbone_left
+        ctrl_bone.gp_rhandle = edbone_right
 
+        
         edbone_left.head = h_left
         edbone_left.tail = h_left + Vector((0.0, 0.0, 1.0))
         edbone_left.use_deform = False
-        edbone_left.parent = root_bone
+        #edbone_left.parent = root_bone
         edbone_left.inherit_scale = 'NONE'
         edbone_left.rigged_stroke = group_id
         edbone_left.poser_lhandle = True
@@ -446,7 +450,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         edbone_right.head = h_right
         edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
         edbone_right.use_deform = False
-        edbone_right.parent = root_bone
+        #edbone_right.parent = root_bone
         edbone_right.inherit_scale = 'NONE'
         edbone_right.rigged_stroke = group_id
         edbone_right.poser_rhandle = True
