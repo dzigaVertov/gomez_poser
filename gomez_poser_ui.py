@@ -220,6 +220,8 @@ def register():
             'greasepencil.resample_rigged', type='R', value='PRESS',shift=True,  ctrl=True)
         kmbb = km.keymap_items.new(
             'greasepencil.gp_bake_animation', type='B', value='PRESS', shift=True, ctrl=True)
+        kmht = km.keymap_items.new(
+            'pose.handle_type_set', type='V', value='PRESS')
         
         addon_keymaps.append((km, kmi))
         addon_keymaps.append((km, kmj))
@@ -228,6 +230,7 @@ def register():
         addon_keymaps.append((km, kmla))
         addon_keymaps.append((km, kmrr))
         addon_keymaps.append((km, kmbb))
+        addon_keymaps.append((km, kmht))
 
         
 def unregister():
