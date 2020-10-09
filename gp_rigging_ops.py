@@ -453,7 +453,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             edbone_left.head = h_left
             edbone_left.tail = h_left + Vector((0.0, 0.0, 1.0))
             edbone_left.use_deform = False
-            #edbone_left.parent = root_bone
+            edbone_left.parent = root_bone
             edbone_left.inherit_scale = 'NONE'
             edbone_left.rigged_stroke = group_id
             edbone_left.poser_lhandle = True
@@ -466,7 +466,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             edbone_right.head = h_right
             edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
             edbone_right.use_deform = False
-            #edbone_right.parent = root_bone
+            edbone_right.parent = root_bone
             edbone_right.inherit_scale = 'NONE'
             edbone_right.rigged_stroke = group_id
             edbone_right.poser_rhandle = True
