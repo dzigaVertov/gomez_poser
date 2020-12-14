@@ -396,7 +396,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     
     # add the knots
     prev_control = None
-    ctrl_bones = [] # Keep to pass to the handles ordered by bone_order
+    ctrl_bones_names = [] # Keep to pass to the handles ordered by bone_order
     for i, p in enumerate(pos):
         name = bname(context, i, role='ctrl_stroke')
         ctrl, tail = p
@@ -408,7 +408,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         edbone.poser_control = True
         edbone.bone_order = i
         edbone.parent = root_bone
-        ctrl_bones.append(edbone)
+        ctrl_bones_names.append(edbone.name)
 
         if prev_control:
             edbone.bbone_custom_handle_start = prev_control
@@ -435,12 +435,12 @@ def add_control_bones(context, armature, pos, threshold, group_id):
 
             edbone.bbone_custom_handle_start = prev_control
             prev_control.bbone_custom_handle_end = edbone
-            ctrl_bones.append(edbone)
+            ctrl_bones_names.append(edbone.name)
             
 
     # Add the handles
-    for idx, handles_and_controls in enumerate(zip(transformed_handles, ctrl_bones)):
-        handles, ctrl_bone  = handles_and_controls
+    for idx, handles_and_controls in enumerate(zip(transformed_handles, ctrl_bones_names)):
+        handles, ctrl_bone_name  = handles_and_controls
         h_left, h_right =  handles
 
         # TODO: find a simpler approach
@@ -449,9 +449,9 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         if h_left:
             name_left = bname(context, idx-1, role='handle', side='left')
             edbone_left = ed_bones.new(name_left)
-            ctrl_bone.gp_lhandle = edbone_left
+            ed_bones[ctrl_bone_name].gp_lhandle = edbone_left
             # For the selection code
-            edbone_left.gp_lhandle = ctrl_bone
+            edbone_left.gp_lhandle = ed_bones[ctrl_bone_name]
             edbone_left.head = h_left
             edbone_left.tail = h_left + Vector((0.0, 0.0, 1.0))
             edbone_left.use_deform = False
@@ -464,9 +464,9 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         if h_right:
             name_right = bname(context, idx, role='handle', side='right')
             edbone_right = ed_bones.new(name_right)
-            ctrl_bone.gp_rhandle = edbone_right
+            ed_bones[ctrl_bone_name].gp_rhandle = edbone_right
             # For the selection code
-            edbone_right.gp_lhandle = ctrl_bone
+            edbone_right.gp_lhandle = ed_bones[ctrl_bone_name]
             edbone_right.head = h_right
             edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
             edbone_right.use_deform = False
@@ -477,14 +477,13 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             edbone_right.bone_order = idx
 
     bpy.ops.object.mode_set(mode='OBJECT')
-    for i, bone in enumerate(ctrl_bones[:-1]):
-        name = bone.name
+    for i, bone_name in enumerate(ctrl_bones_names[:-1]):
         
         # adding constraints
         if i < len(pos):
-            add_copy_location(armature, name, i, group_id)
+            add_copy_location(armature, bone_name, i, group_id)
         if i > 0:
-            add_stretch_to(armature, name, i, group_id)
+            add_stretch_to(armature, bone_name, i, group_id)
         if i == len(pos) - 1:
             next_ctrl_bone = get_bone(armature.data.bones, group_id, 'CTRL', i+1)
             add_stretch_to(armature, next_ctrl_bone.name, i+1, group_id)
