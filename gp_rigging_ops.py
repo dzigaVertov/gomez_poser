@@ -450,6 +450,8 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             name_left = bname(context, idx-1, role='handle', side='left')
             edbone_left = ed_bones.new(name_left)
             ctrl_bone.gp_lhandle = edbone_left
+            # For the selection code
+            edbone_left.gp_lhandle = ctrl_bone
             edbone_left.head = h_left
             edbone_left.tail = h_left + Vector((0.0, 0.0, 1.0))
             edbone_left.use_deform = False
@@ -463,6 +465,8 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             name_right = bname(context, idx, role='handle', side='right')
             edbone_right = ed_bones.new(name_right)
             ctrl_bone.gp_rhandle = edbone_right
+            # For the selection code
+            edbone_right.gp_lhandle = ctrl_bone
             edbone_right.head = h_right
             edbone_right.tail = h_right + Vector((0.0, 0.0, 1.0))
             edbone_right.use_deform = False
