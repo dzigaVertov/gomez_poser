@@ -375,6 +375,10 @@ def add_control_bones(context, armature, pos, threshold, group_id):
 
     handles = [None] + handles + [None]
 
+    first_handle = 2*pos[0][0] - Vector(handles[1])
+    last_handle = 2*pos[-1][1] - Vector(handles[-2])
+    handles[0] = first_handle
+    handles[-1] = last_handle
     handles = list(zip(handles[::2], handles[1::2]))
     
     transformed_handles = transform_bones_positions(context, handles)
