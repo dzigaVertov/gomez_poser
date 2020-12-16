@@ -52,7 +52,7 @@ class GopoProperties(bpy.types.PropertyGroup):
     ob_armature: PointerProperty(type=bpy.types.Object,
                                  poll=lambda self, object: object.type == 'ARMATURE')
     gp_ob: PointerProperty(type=bpy.types.Object,
-                           poll=lambda self, object: object.type == 'GPENCIL')
+                          poll=lambda self, object: object.type == 'GPENCIL')
     current_bone_group: IntProperty(default=0)
     frame_init: IntProperty(name='start_frame', default=1, min=0, max=1000000)
     frame_end: IntProperty(name='end_frame', default=1, min=0, max=1000000)

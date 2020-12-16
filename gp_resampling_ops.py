@@ -57,16 +57,12 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
                             description='Maximum distance between consecutive points',
                             default=0.025)
 
-    gp_ob: PointerProperty(type=bpy.types.Object,
-                           name='gpencil_ob',
-                           description='The Grease Pencil object to resample')
 
-    def get_stroke_to_resample(self, context, group_id, gp_ob=None):
+    def get_stroke_to_resample(self, context, group_id):
         """
         Return the stroke with the correspoinding group_id
         """
-        if not gp_ob:
-            gp_ob = context.window_manager.gopo_prop_group.gp_ob
+        gp_ob = context.window_manager.gopo_prop_group.gp_ob
         for layer in gp_ob.data.layers:
             for frame in layer.frames:
                 for stroke in frame.strokes:
@@ -79,11 +75,11 @@ class GOMEZ_OT_resample_rigged(bpy.types.Operator):
         Return the indices of the points 
         """
         depsgraph = context.evaluated_depsgraph_get()
-        gp_ob = context.window_manager.gopo_prop_group.gp_ob # self.gp_ob
+        gp_ob = context.window_manager.gopo_prop_group.gp_ob
         
         gp_obeval = gp_ob.evaluated_get(depsgraph)
         evald_stroke = self.get_stroke_to_resample(
-            context, group_id, gp_ob=gp_obeval)
+            context, group_id)
 
         point_pairs = zip(evald_stroke.points, evald_stroke.points[1:])
         indices = []
