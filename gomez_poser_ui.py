@@ -52,18 +52,24 @@ def set_control_visibility(context, event):
         return
     # ctrls_to_show = set(
     #     pbone.bone.rigged_stroke for pbone in pbones if pbone.bone.select)
+    view = context.space_data
+    overlay = view.overlay
 
     for pbone in pbones:
 
         ctrl_bone = pbone.bone.poser_control
         handle_bone = pbone.bone.poser_handle
+        show_handle = handle_bone and \
+            ((overlay.display_handle == 'ALL') or \
+             ((overlay.display_handle == 'SELECTED')) and \
+             (pbone.bone.select or pbone.bone.gp_lhandle.select))
 
-        if (ctrl_bone or handle_bone): #and pbone.bone.rigged_stroke in ctrls_to_show:
+        if (ctrl_bone or show_handle): #and pbone.bone.rigged_stroke in ctrls_to_show:
             pbone.bone.layers[0] = True
             pbone.bone.layers[3] = True
-        # elif (ctrl_bone or handle_bone):
-        #     pbone.bone.layers[0] = event.alt
-        #     pbone.bone.layers[3] = True
+        else:
+            pbone.bone.layers[0] = False #event.alt
+            pbone.bone.layers[3] = True
 
 
         

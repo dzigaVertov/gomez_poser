@@ -509,7 +509,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
 
         if rest_bone.poser_handle:
             pbone.custom_shape = bpy.data.objects['ctrl_cone']
-            pbone.custom_shape_scale = 0.01
+            pbone.custom_shape_scale = 0.025
             rest_bone.show_wire = True
             rest_bone.layers[1] = True
             rest_bone.layers[0] = False
