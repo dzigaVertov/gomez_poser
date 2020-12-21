@@ -28,6 +28,7 @@ from mathutils import Vector, Matrix, kdtree
 import bmesh
 from . import gp_armature_applier
 from .gp_armature_applier import remove_vertex_groups
+from .gp_rigging_ops import change_context
 from bpy_extras.view3d_utils import location_3d_to_region_2d
 from math import ceil, log
 
@@ -50,21 +51,23 @@ def set_control_visibility(context, event):
     pbones = context.object.pose.bones
     if not pbones:
         return
-    # ctrls_to_show = set(
-    #     pbone.bone.rigged_stroke for pbone in pbones if pbone.bone.select)
     view = context.space_data
+    if not view or not view.overlay:
+        return
+    
     overlay = view.overlay
 
     for pbone in pbones:
 
         ctrl_bone = pbone.bone.poser_control
+        root_bone = pbone.bone.poser_root
         handle_bone = pbone.bone.poser_handle
         show_handle = handle_bone and \
             ((overlay.display_handle == 'ALL') or \
              ((overlay.display_handle == 'SELECTED')) and \
              (pbone.bone.select or pbone.bone.gp_lhandle.select))
 
-        if (ctrl_bone or show_handle): #and pbone.bone.rigged_stroke in ctrls_to_show:
+        if (ctrl_bone or root_bone or show_handle): #and pbone.bone.rigged_stroke in ctrls_to_show:
             pbone.bone.layers[0] = True
             pbone.bone.layers[3] = True
         else:
@@ -114,7 +117,8 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         armature = context.window_manager.gopo_prop_group.ob_armature
-        if  (context.space_data.type == 'VIEW_3D') and (context.mode == 'PAINT_GPENCIL') and armature:
+        
+        if  ( context.space_data and context.space_data.type == 'VIEW_3D') and armature:
             return True
         else:
             return False

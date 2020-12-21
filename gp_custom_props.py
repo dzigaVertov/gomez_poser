@@ -20,6 +20,7 @@ Created by Marcelo Demian Gómez
 
 import bpy
 from bpy.props import FloatProperty, IntProperty, FloatVectorProperty, BoolProperty, PointerProperty, CollectionProperty, StringProperty
+from .gp_rigging_ops import change_context
 
 
 class FittedBone(bpy.types.PropertyGroup):
@@ -71,9 +72,28 @@ class GopoProperties(bpy.types.PropertyGroup):
                                               default=True)
 
 
+def notify_mode_change():
+    ob_act = bpy.context.active_object
+    if bpy.context.mode == 'POSE' and ob_act.data.is_gposer_armature:
+        con = change_context(bpy.context, ob_act, obtype='ARMATURE')
+        bpy.ops.greasepencil.go_pose(con)
+    
+
+
 def register():
     bpy.utils.register_class(FittedBone)
     bpy.utils.register_class(GopoProperties)
+
+    # Register subscriber to mode change to set bones visibility
+    handle = GopoProperties
+    subscribe_to = bpy.types.Object, "mode"
+
+    bpy.msgbus.subscribe_rna(
+        key=subscribe_to,
+        owner=handle,
+        args=(),
+        notify=notify_mode_change,
+    )
 
     
     bpy.types.WindowManager.gopo_prop_group = PointerProperty(
@@ -97,6 +117,7 @@ def register():
     bpy.types.GreasePencil.current_bone_group = IntProperty(default=0)
 
 def unregister():
+    bpy.msgbus.clear_by_owner(GopoProperties)
     bpy.utils.unregister_class(FittedBone)
     bpy.utils.unregister_class(GopoProperties)
 
