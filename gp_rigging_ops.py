@@ -412,6 +412,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
         edbone.poser_control = True
         edbone.bone_order = i
         edbone.parent = root_bone
+
         ctrl_bones_names.append(edbone.name)
 
         if prev_control:
@@ -499,6 +500,9 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     for pbone in pose_bones:
         rest_bone = pbone.bone
         if rest_bone.poser_control or rest_bone.poser_root:
+            # Add handle type provisionally here
+            rest_bone.gposer_lhandle_type = 'FREE'
+            rest_bone.gposer_rhandle_type = 'FREE'
             pbone.custom_shape = bpy.data.objects['ctrl_sphere']
             pbone.custom_shape_scale = 0.025 if rest_bone.poser_control else 0.1
             rest_bone.layers[0] = True
