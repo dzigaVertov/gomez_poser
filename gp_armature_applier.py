@@ -61,9 +61,11 @@ def are_we_removing_bonegroup(context, group_id):
     for layer in gp_ob.data.layers:
         for frame in layer.frames:
             for stroke in frame.strokes:
-                for group in stroke.groups:
-                    if group.group == vgroup.index:
-                        return False
+                try:
+                    stroke.points.weight_get(vertex_group_index=vgroup.index, point_index=0)
+                    return False
+                except RuntimeError:
+                    continue
     return True
 
 

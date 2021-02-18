@@ -616,15 +616,14 @@ def prepare_interface(context, armature):
     bpy.ops.greasepencil.go_pose()
 
 
-def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshold):
+def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshold, stroke=None, stroke_index=None):
 
     armature.data.is_gposer_armature = True
-    
-    # Get and initialize stroke to be rigged
     group_id = gp_ob.data.current_bone_group
-    stroke_index = get_stroke_index(context, gp_ob)
-    stroke = gp_ob.data.layers.active.active_frame.strokes[stroke_index]
-
+    if not stroke:
+        # Get and initialize stroke to be rigged
+        stroke_index = get_stroke_index(context, gp_ob)
+        stroke = gp_ob.data.layers.active.active_frame.strokes[stroke_index]
     stroke.bone_groups = group_id
     context.view_layer.objects.active = gp_ob
     # fit the curve
@@ -706,10 +705,78 @@ class Gomez_OT_Poser(bpy.types.Operator):
 
         return False
 
+class Gomez_OT_Rig_All_Strokes(bpy.types.Operator):
+    """
+    Rig all strokes in active keyframe.  Either only active layer or all layers.
+    """
+    bl_idname = "greasepencil.rig_all_strokes"
+    bl_label = "Rig all strokes"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    closed_stroke_threshold: FloatProperty(name='closed_stroke_threshold', default=0.03)
+    error_threshold: FloatProperty(name='error_threshold', default=0.01)
+
+    def invoke(self, context, event):
+        if context.object.type == 'GPENCIL':
+            
+            context.window_manager.gopo_prop_group.gp_ob = context.object
+            self.error_threshold = context.window_manager.gopo_prop_group.error_threshold
+            return self.execute(context)
+        return {'CANCELLED'}
+
+    def execute(self, context):
+        # Make sure the auxiliary objects have been created
+        gp_auxiliary_objects.assure_auxiliary_objects(context)
+        
+        if context.mode == 'POSE':
+            bpy.ops.object.mode_set(mode='OBJECT')
+            
+        gp_ob = context.window_manager.gopo_prop_group.gp_ob
+        context.view_layer.objects.active = gp_ob
+        ob_armature = context.window_manager.gopo_prop_group.ob_armature
+
+        strokes_to_rig = [(idx, stroke) for idx,stroke in enumerate(gp_ob.data.layers.active.active_frame.strokes) if stroke.bone_groups == 0]
+        for stroke_index, stroke in strokes_to_rig:
+            context.window_manager.gopo_prop_group.gp_ob.data.current_bone_group += 1
+            fit_and_add_bones(ob_armature, gp_ob, context,
+                              self.closed_stroke_threshold, self.error_threshold, stroke, stroke_index)
+
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        """
+        es greaspencil? tiene layer activa? hay frame activo? hay strokes?
+        hay armature seleccionada? 
+        """
+        if not context.window_manager.gopo_prop_group.ob_armature:
+            return False
+        if not context.window_manager.gopo_prop_group.ob_armature.type == 'ARMATURE':
+            return False
+        if not context.object:
+            return False
+        if context.object.type == 'GPENCIL':
+            if not context.object.data.layers.active:
+                return False
+            if not context.object.data.layers.active.active_frame:
+                return False
+            if not context.object.data.layers.active.active_frame.strokes:
+                return False
+            return True
+        elif context.object.type == 'ARMATURE':
+            gp_ob = context.window_manager.gopo_prop_group.gp_ob
+            if context.mode == 'POSE' and gp_ob:
+                return True
+
+        return False
+    
+
 
 def register():
     bpy.utils.register_class(Gomez_OT_Poser)
+    bpy.utils.register_class(Gomez_OT_Rig_All_Strokes)
 
 
 def unregister():
     bpy.utils.unregister_class(Gomez_OT_Poser)
+    bpy.utils.unregister_class(Gomez_OT_Rig_All_Strokes)
