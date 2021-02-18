@@ -231,6 +231,8 @@ def register():
             'greasepencil.gp_bake_animation', type='B', value='PRESS', shift=True, ctrl=True)
         kmht = km.keymap_items.new(
             'pose.handle_type_set', type='V', value='PRESS')
+        kmras = km.keymap_items.new(
+            'greasepencil.rig_all_strokes', type='P', value='PRESS', shift=True, ctrl=True)
         
         addon_keymaps.append((km, kmi))
         addon_keymaps.append((km, kmj))
@@ -240,6 +242,7 @@ def register():
         addon_keymaps.append((km, kmrr))
         addon_keymaps.append((km, kmbb))
         addon_keymaps.append((km, kmht))
+        addon_keymaps.append((km, kmras))
 
         
 def unregister():
