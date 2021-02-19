@@ -698,13 +698,10 @@ class Gomez_OT_Poser(bpy.types.Operator):
             if not context.object.data.layers.active.active_frame.strokes:
                 return False
             return True
-        elif context.object.type == 'ARMATURE':
-            gp_ob = context.window_manager.gopo_prop_group.gp_ob
-            if context.mode == 'POSE' and gp_ob:
-                return True
 
         return False
 
+    
 class Gomez_OT_Rig_All_Strokes(bpy.types.Operator):
     """
     Rig all strokes in active keyframe.  Either only active layer or all layers.
