@@ -665,15 +665,22 @@ class Gomez_OT_Poser(bpy.types.Operator):
     def execute(self, context):
         # Make sure the auxiliary objects have been created
         gp_auxiliary_objects.assure_auxiliary_objects(context)
-        
-        if context.mode == 'POSE':
-            bpy.ops.object.mode_set(mode='OBJECT')
-            
+                
         gp_ob = context.window_manager.gopo_prop_group.gp_ob
         context.view_layer.objects.active = gp_ob
         ob_armature = context.window_manager.gopo_prop_group.ob_armature
-
-        fit_and_add_bones(ob_armature, gp_ob, context,
+        if context.mode == 'EDIT_GPENCIL':
+            strokes_to_fit = []
+            for layer in gp_ob.data.layers:
+                for idx, stroke in enumerate(layer.active_frame.strokes):
+                    if stroke.select:
+                        strokes_to_fit.append((layer, idx))
+            for layer, stroke_index in strokes_to_fit:
+                gp_ob.data.layers.active = layer
+                fit_and_add_bones(ob_armature, gp_ob, context,
+                                  self.closed_stroke_threshold, self.error_threshold, stroke=layer.active_frame.strokes[stroke_index], stroke_index=stroke_index)
+        else:
+            fit_and_add_bones(ob_armature, gp_ob, context,
                           self.closed_stroke_threshold, self.error_threshold)
 
         return {'FINISHED'}
