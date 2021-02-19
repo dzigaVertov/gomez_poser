@@ -656,7 +656,6 @@ class Gomez_OT_Poser(bpy.types.Operator):
 
     def invoke(self, context, event):
         if context.object.type == 'GPENCIL':
-            context.window_manager.gopo_prop_group.gp_ob.data.current_bone_group += 1
             context.window_manager.gopo_prop_group.gp_ob = context.object
             self.error_threshold = context.window_manager.gopo_prop_group.error_threshold
             return self.execute(context)
@@ -677,9 +676,11 @@ class Gomez_OT_Poser(bpy.types.Operator):
                         strokes_to_fit.append((layer, idx))
             for layer, stroke_index in strokes_to_fit:
                 gp_ob.data.layers.active = layer
+                gp_ob.data.current_bone_group += 1
                 fit_and_add_bones(ob_armature, gp_ob, context,
                                   self.closed_stroke_threshold, self.error_threshold, stroke=layer.active_frame.strokes[stroke_index], stroke_index=stroke_index)
         else:
+            gp_ob.data.current_bone_group += 1
             fit_and_add_bones(ob_armature, gp_ob, context,
                           self.closed_stroke_threshold, self.error_threshold)
 
@@ -721,8 +722,7 @@ class Gomez_OT_Rig_All_Strokes(bpy.types.Operator):
     error_threshold: FloatProperty(name='error_threshold', default=0.01)
 
     def invoke(self, context, event):
-        if context.object.type == 'GPENCIL':
-            
+        if context.object.type == 'GPENCIL':           
             context.window_manager.gopo_prop_group.gp_ob = context.object
             self.error_threshold = context.window_manager.gopo_prop_group.error_threshold
             return self.execute(context)
@@ -739,11 +739,15 @@ class Gomez_OT_Rig_All_Strokes(bpy.types.Operator):
         context.view_layer.objects.active = gp_ob
         ob_armature = context.window_manager.gopo_prop_group.ob_armature
 
-        strokes_to_rig = [(idx, stroke) for idx,stroke in enumerate(gp_ob.data.layers.active.active_frame.strokes) if stroke.bone_groups == 0]
-        for stroke_index, stroke in strokes_to_rig:
-            context.window_manager.gopo_prop_group.gp_ob.data.current_bone_group += 1
+        strokes_to_fit = []
+        for layer in [l for l in gp_ob.data.layers if not l.lock]:
+            for idx, stroke in enumerate(layer.active_frame.strokes):
+                strokes_to_fit.append((layer, idx))
+        for layer, idx in strokes_to_fit:
+            gp_ob.data.current_bone_group +=1
+            gp_ob.data.layers.active = layer
             fit_and_add_bones(ob_armature, gp_ob, context,
-                              self.closed_stroke_threshold, self.error_threshold, stroke, stroke_index)
+                              self.closed_stroke_threshold, self.error_threshold, layer.active_frame.strokes[idx], idx)
 
         return {'FINISHED'}
 
