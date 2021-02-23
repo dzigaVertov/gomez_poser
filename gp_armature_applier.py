@@ -1,5 +1,4 @@
 import bpy
-
 from bpy.props import FloatProperty
 from bpy.props import IntProperty
 from bpy.props import BoolProperty, PointerProperty, CollectionProperty, StringProperty
@@ -14,7 +13,6 @@ def can_remove_vg(gp_ob, vgroup):
         for frame in layer.frames:
             for stroke in frame.strokes:
                 for group in stroke.groups:
-
                     if group.group == vgroup.index:
                         return False
     return True
@@ -91,7 +89,6 @@ def remove_stroke(gp_ob, group_id):
     """
     Removes a stroke with a given bonegroup
     """
-    
     for layer in gp_ob.data.layers:
         for frame in layer.frames:
             for stroke in frame.strokes:
@@ -102,12 +99,12 @@ def remove_stroke(gp_ob, group_id):
 def get_target_strokes(context):
     """
     Returns the bonegroups of the strokes where the modifier should be applied
-    They correspond to the active layer and the active frame of the
+    They correspond to the active frame of all the layers of the
     active object.
     (Returns the selected strokes for now)
     """
     gp_ob = context.object
-    all_strokes = gp_ob.data.layers.active.active_frame.strokes
+    all_strokes = [stroke for layer in gp_ob.data.layers if not layer.lock for stroke in layer.strokes]
 
     return set([stroke.bone_groups for stroke in all_strokes if stroke.select])
 
@@ -319,12 +316,15 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
         vertex_color_fill = stroke.vertex_color_fill
         # First get the points.
         baked_points = dict()
-
+        # # TODO: fix this, just a test
+        # depsgraph = context.evaluated_depsgraph_get()
+        # gp_obeval = gp_ob.evaluated_get(depsgraph)
         
         for fr in range(inf, outf+1, step):
             context.scene.frame_set(fr)
 
-            evald_stroke = gp_obeval.data.layers.active.active_frame.strokes[stroke_idx]
+            # evald_stroke = gp_obeval.data.layers.active.active_frame.strokes[stroke_idx]
+            evald_stroke = gp_obeval.data.layers[source_layer.info].active_frame.strokes[stroke_idx]
 
             pts_eval = list((pt.co.copy(), pt.strength, pt.pressure, pt.vertex_color) for pt in evald_stroke.points)
 
@@ -373,8 +373,6 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
 
 
     def execute(self, context):
-        
-
         if context.mode =='POSE':
             bone_groups = set()
             for pbone in context.selected_pose_bones:
@@ -385,28 +383,32 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
             context.view_layer.objects.active = gp_ob
         else:
             bone_groups = get_target_strokes(context)
-        depsgraph = context.evaluated_depsgraph_get()
         gp_ob = context.object
+        depsgraph = context.evaluated_depsgraph_get()
         gp_obeval = gp_ob.evaluated_get(depsgraph)
-        layer_to_bake = gp_ob.data.layers.active
 
-        kf_frame_number = layer_to_bake.active_frame.frame_number
+        layers = [layer for layer in gp_ob.data.layers if not layer.lock]
+        for layer in layers:
+            gp_ob.data.layers.active = layer 
+            kf_frame_number = layer.active_frame.frame_number
 
-        if kf_frame_number < self.frame_init:
-            self.split = True
+            if kf_frame_number < self.frame_init:
+                self.split = True
         
-        if self.bake_to_new_layer:
-            layer = gp_ob.data.layers.new('baked_' + layer_to_bake.info , set_active=False)
-        else:
-            layer = gp_ob.data.layers.active 
+            if self.bake_to_new_layer:
+                new_layer = gp_ob.data.layers.new('baked_' + layer.info , set_active=False)
+            else:
+                new_layer = gp_ob.data.layers.active 
 
-        for group_id in bone_groups:
-            self.bake_stroke(context, gp_ob, gp_obeval,layer_to_bake, layer,  group_id)
+            for group_id in bone_groups:
+                self.bake_stroke(context, gp_ob, gp_obeval,layer, new_layer,  group_id)
 
-        for group_id in bone_groups:
-            bpy.ops.greasepencil.gp_clean_baked(group_id=group_id,
-                                                init_frame=self.frame_init,
-                                                end_frame=self.frame_end)
+        for layer in layers:
+            for group_id in bone_groups:
+                bpy.ops.greasepencil.gp_clean_baked(group_id=group_id,
+                                                    init_frame=self.frame_init,
+                                                    end_frame=self.frame_end,
+                                                    layer_name = layer.info)
 
         return {'FINISHED'}
 
