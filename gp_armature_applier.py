@@ -146,8 +146,7 @@ def clean_gp_object(context, group_id, init_frame, end_frame, remove_bonegroup):
         remove_armature_mod(gp_ob, group_id)
     
     remove_vertex_groups(gp_ob, group_id, remove_bonegroup=remove_bonegroup)
-    # TODO: check when is this necessary
-    #remove_stroke(gp_ob, group_id)
+
     
 
 
@@ -316,14 +315,10 @@ class GOMEZ_OT_bake_animation(bpy.types.Operator):
         vertex_color_fill = stroke.vertex_color_fill
         # First get the points.
         baked_points = dict()
-        # # TODO: fix this, just a test
-        # depsgraph = context.evaluated_depsgraph_get()
-        # gp_obeval = gp_ob.evaluated_get(depsgraph)
         
         for fr in range(inf, outf+1, step):
             context.scene.frame_set(fr)
 
-            # evald_stroke = gp_obeval.data.layers.active.active_frame.strokes[stroke_idx]
             evald_stroke = gp_obeval.data.layers[source_layer.info].active_frame.strokes[stroke_idx]
 
             pts_eval = list((pt.co.copy(), pt.strength, pt.pressure, pt.vertex_color) for pt in evald_stroke.points)
