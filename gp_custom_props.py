@@ -35,6 +35,45 @@ class FittedBone(bpy.types.PropertyGroup):
     vg_idx: bpy.props.IntVectorProperty(size=2)
 
 
+def maybe_hide_roots(self, context):
+    armature = self.ob_armature
+    armature.data.layers[4] = self.show_roots
+    return
+
+def maybe_hide_ctrls(self, context):
+    armature = self.ob_armature
+    armature.data.layers[0] = self.show_ctrls
+    return
+
+def maybe_hide_handles(self, context):
+    armature = self.ob_armature
+    armature.data.layers[1] = self.show_handles
+    return
+
+def update_root_scale(self, context):
+    armature = self.ob_armature
+    for pbone in armature.pose.bones:
+        if pbone.bone.poser_root:
+            pbone.custom_shape_scale = self.root_scale
+    return
+
+def update_handle_scale(self, context):
+    armature = self.ob_armature
+    for pbone in armature.pose.bones:
+        if pbone.bone.poser_handle:
+            pbone.custom_shape_scale = self.handle_scale
+    return
+
+def update_ctrl_scale(self, context):
+    armature = self.ob_armature
+    for pbone in armature.pose.bones:
+        if pbone.bone.poser_control:
+            pbone.custom_shape_scale = self.ctrl_scale
+    return 
+
+
+
+
 class GopoProperties(bpy.types.PropertyGroup):
     """
     Variables de configuración de Gomez Poser
@@ -70,6 +109,49 @@ class GopoProperties(bpy.types.PropertyGroup):
     bake_from_active_to_current: BoolProperty(name='from_active_to_current',
                                               description='Bake stroke from active keyframe to current frame',
                                               default=True)
+
+    show_roots: BoolProperty(name='show_roots',
+                             description='Show the root bones of each stroke',
+                             default=True,
+                             update=maybe_hide_roots
+                             )
+
+    show_ctrls: BoolProperty(name='show_ctrls',
+                             description='Show the ctrl bones of each stroke',
+                             default=True,
+                             update=maybe_hide_ctrls
+                             )
+
+    show_handles: BoolProperty(name='show_handles',
+                             description='Show the handle bones of each stroke',
+                             default=True,
+                             update=maybe_hide_handles
+                             )
+
+    root_scale: FloatProperty(name='root_scale',
+                              description='scale of the root bone',
+                              default=0.1,
+                              min=0.0,
+                              update=update_root_scale
+                              )
+
+    ctrl_scale: FloatProperty(name='ctrl_scale',
+                              description='scale of the ctrl bone',
+                              default = 0.025,
+                              min = 0.0,
+                              update=update_ctrl_scale
+                              )
+
+    handle_scale: FloatProperty(name='handle_scale',
+                                description='scale of the handle bone',
+                                default=0.025,
+                                min=0.0,
+                                update=update_handle_scale
+                                )
+
+    
+
+
 
 
 def notify_mode_change():

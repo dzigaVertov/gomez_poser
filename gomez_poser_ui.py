@@ -42,12 +42,19 @@ addon_keymaps = []
 # ----------------------------------------------------------------------
 
 
-def set_control_visibility(context, event):
+def set_control_visibility(context, event=None):
     """
     Controls visibility of control and handle bones
     Makes all controls from the same stroke visible 
     """
     # TODO: Fix all this
+    # Show layer 6 and the controls set in the interface
+    addon_properties = context.window_manager.gopo_prop_group
+    armature = addon_properties.ob_armature
+    armature.data.layers[6] = True
+    armature.data.layers[0] = addon_properties.show_ctrls
+    armature.data.layers[1] = addon_properties.show_handles
+    armature.data.layers[4] = addon_properties.show_roots
     pbones = context.object.pose.bones
     if not pbones:
         return
@@ -67,12 +74,19 @@ def set_control_visibility(context, event):
              ((overlay.display_handle == 'SELECTED')) and \
              (pbone.bone.select or pbone.bone.gp_lhandle.select))
 
-        if (ctrl_bone or root_bone or show_handle): #and pbone.bone.rigged_stroke in ctrls_to_show:
+        if ctrl_bone:
             pbone.bone.layers[0] = True
-            pbone.bone.layers[3] = True
-        else:
-            pbone.bone.layers[0] = False #event.alt
-            pbone.bone.layers[3] = True
+        elif root_bone:
+            pbone.bone.layers[4] = True
+        elif handle_bone:
+            pbone.bone.layers[1] = True
+            
+        # if (ctrl_bone or root_bone or show_handle): #and pbone.bone.rigged_stroke in ctrls_to_show:
+        #     pbone.bone.layers[0] = True
+        #     pbone.bone.layers[3] = True
+        # else:
+        #     pbone.bone.layers[0] = False #event.alt
+        #     pbone.bone.layers[3] = True
 
 
         
@@ -93,7 +107,7 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
         if event.shift and event.type == 'O':
             bpy.ops.armature.go_draw()
             return {'FINISHED'}
-        set_control_visibility(context, event)
+        # set_control_visibility(context, event)
 
         return {'PASS_THROUGH'}
 
@@ -111,6 +125,7 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
         context.view_layer.objects.active = armature
         bpy.ops.object.mode_set(mode='POSE')
         context.window_manager.modal_handler_add(self)
+        set_control_visibility(context)
 
         return {'RUNNING_MODAL'}
 
@@ -191,6 +206,12 @@ class GomezPTPanel(bpy.types.Panel):
         
         what = layout.row().operator("greasepencil.poser")
 
+        layout.row().prop(addon_properties, 'show_roots')
+        layout.row().prop(addon_properties, 'show_ctrls')
+        layout.row().prop(addon_properties, 'show_handles')
+        layout.row().prop(addon_properties, 'root_scale')
+        layout.row().prop(addon_properties, 'handle_scale')
+        layout.row().prop(addon_properties, 'ctrl_scale')
         layout.column()
 
         hide_frame_range = addon_properties.bake_from_active_to_current

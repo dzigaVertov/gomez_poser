@@ -307,7 +307,7 @@ def add_deform_bones(context, armature, pos, ease, group_id):
     for bone in armature.data.bones:
         if bone.poser_deform:
             bone.layers[-1] = True
-            bone.layers[0] = False
+            bone.layers[0] = bone.layers[1] = bone.layers[4] = bone.layers[6] = False
 
 
 def add_handles(context, armature, i, group_id):
@@ -366,6 +366,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
     Adds custom shapes - Puts control bones in first layer.
     Hides handle bones
     """
+    addon_properties = context.window_manager.gopo_prop_group
     # TODO: fix the original alignement bug - we where misassigning the handles
     h_coefs = context.window_manager.fitted_bones
     handles = []
@@ -504,16 +505,18 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             rest_bone.gposer_lhandle_type = 'FREE'
             rest_bone.gposer_rhandle_type = 'FREE'
             pbone.custom_shape = bpy.data.objects['ctrl_sphere']
-            pbone.custom_shape_scale = 0.025 if rest_bone.poser_control else 0.1
-            rest_bone.layers[0] = True
+            pbone.custom_shape_scale = addon_properties.ctrl_scale if rest_bone.poser_control else addon_properties.root_scale
+            rest_bone.layers[4] = True if rest_bone.poser_root else False
+            rest_bone.layers[0] = True if rest_bone.poser_control else False
             rest_bone.layers[-1] = False
             # TODO FIX this if bone has parent, hide it
             if rest_bone.parent and rest_bone.parent.poser_control:
                 rest_bone.hide = True
+            rest_bone.layers[1] = rest_bone.layers[6] = False
 
         if rest_bone.poser_handle:
             pbone.custom_shape = bpy.data.objects['ctrl_cone']
-            pbone.custom_shape_scale = 0.025
+            pbone.custom_shape_scale = addon_properties.handle_scale
             rest_bone.show_wire = True
             rest_bone.layers[1] = True
             rest_bone.layers[0] = False
@@ -633,6 +636,8 @@ def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshol
                               stroke_index=stroke_index)
 
     pos, ease = get_bones_positions(context)
+    if len(pos) == 0:
+        return
     # store the length of the chain for rigging purposes
     context.window_manager.gopo_prop_group.num_bones = len(pos)
     add_deform_bones(context, armature, pos, ease, group_id)
@@ -671,10 +676,15 @@ class Gomez_OT_Poser(bpy.types.Operator):
         if context.mode == 'EDIT_GPENCIL':
             strokes_to_fit = []
             for layer in gp_ob.data.layers:
+                if layer.lock:
+                    continue
                 for idx, stroke in enumerate(layer.active_frame.strokes):
                     if stroke.select:
                         strokes_to_fit.append((layer, idx))
+            num_strokes = len(strokes_to_fit)
             for layer, stroke_index in strokes_to_fit:
+                print(f'restan {num_strokes}')
+                num_strokes -=1
                 gp_ob.data.layers.active = layer
                 gp_ob.data.current_bone_group += 1
                 fit_and_add_bones(ob_armature, gp_ob, context,
