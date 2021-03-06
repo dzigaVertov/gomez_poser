@@ -18,14 +18,14 @@ Created by Marcelo Demian Gómez
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import bpy
-from line_profiler import LineProfiler
+# from line_profiler import LineProfiler
 
 from mathutils import Vector, Matrix, kdtree
 
 from bpy.props import FloatProperty, IntProperty, FloatVectorProperty, BoolProperty, PointerProperty, CollectionProperty, StringProperty
 from . import gp_auxiliary_objects
 
-profile = LineProfiler()
+# profile = LineProfiler()
 
 def is_bone_type(bone, bonetype):
 
@@ -541,18 +541,19 @@ def add_armature(context, gp_ob, stroke, armature, group_id):
     mod.object = armature
 
     context.view_layer.objects.active = gp_ob
-    bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
-    bpy.ops.gpencil.select_all(action='DESELECT')
-
-    for pt in stroke.points:
-        pt.select = True
-
-    con = change_context(context, gp_ob)
+    # bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
+    # bpy.ops.gpencil.select_all(action='DESELECT')
     vgroup = gp_ob.vertex_groups.new(name=name)
     vgroup.bone_group = group_id
     vgroup.deform_group = False
-    bpy.ops.gpencil.vertex_group_assign(con)
     mod.vertex_group = name
+    # bpy.ops.gpencil.vertex_group_assign(con)
+    for idx,pt in enumerate(stroke.points):
+        stroke.points.weight_set(vertex_group_index=vgroup.index, point_index=idx, weight=1.0)
+        # pt.select = True
+
+    # con = change_context(context, gp_ob)
+
 
 
 def add_vertex_groups(context, gp_ob, armature, bone_group=None):
@@ -583,7 +584,7 @@ def add_weights(context, gp_ob, stroke, bone_group=None):
     indices = get_points_indices(context, stroke)
 
     context.view_layer.objects.active = gp_ob
-    bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
+    #bpy.ops.object.mode_set(mode='EDIT_GPENCIL')
 
     pts = stroke.points
 
@@ -594,23 +595,24 @@ def add_weights(context, gp_ob, stroke, bone_group=None):
         for point in pts:
             point.select = False
         # bpy.ops.gpencil.select_all(action='DESELECT')
-        gp_ob.vertex_groups.active_index = group.index
+        # gp_ob.vertex_groups.active_index = group.index
         min_pt_index, max_pt_index = idx
 
         for point_idx in range(len(pts)):
             if min_pt_index <= point_idx <= max_pt_index:
-                pts[point_idx].select = True
-            else:
-                pts[point_idx].select = False
-        con = change_context(context, gp_ob)
-        bpy.ops.gpencil.vertex_group_assign(con)
+                pts.weight_set(vertex_group_index=group.index, point_index=point_idx, weight=1.0)
+            #     pts[point_idx].select = True
+            # else:
+            #     pts[point_idx].select = False
+        #con = change_context(context, gp_ob)
+        #bpy.ops.gpencil.vertex_group_assign(con)
 
     # at the end make sure all points in stroke are deselected
-    for point in pts:
-        point.select = False
+    # for point in pts:
+    #     point.select = False
 
     # TODO: change this, should not be set here
-    bpy.ops.object.mode_set(mode='PAINT_GPENCIL')
+    # bpy.ops.object.mode_set(mode='PAINT_GPENCIL')
 
 
 def prepare_interface(context, armature):
@@ -622,6 +624,7 @@ def prepare_interface(context, armature):
     context.window_manager.fitted_bones.clear()
     bpy.ops.greasepencil.go_pose()
 
+    
 
 def fit_and_add_bones(armature, gp_ob, context, closed_threshold, error_threshold, stroke=None, stroke_index=None):
 
@@ -802,4 +805,4 @@ def register():
 def unregister():
     bpy.utils.unregister_class(Gomez_OT_Poser)
     bpy.utils.unregister_class(Gomez_OT_Rig_All_Strokes)
-    profile.dump_stats("/home/marcelo/Desktop/lineprof.prof")
+    # profile.dump_stats("/home/marcelo/Desktop/lineprof.prof")
