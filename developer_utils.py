@@ -39,7 +39,7 @@ def setup_addon_modules(path, package_name, reload):
 
     names = get_submodule_names()
     modules = import_submodules(names)
-    print(f'Esta importando algo: {names}')
+    
     if reload:
         reload_modules(modules)
     return modules

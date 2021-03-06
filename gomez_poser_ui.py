@@ -136,7 +136,7 @@ class GOMEZ_OT_go_pose(bpy.types.Operator):
         if  ( context.space_data and context.space_data.type == 'VIEW_3D') and armature:
             return True
         else:
-            return False
+            return True
 
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------

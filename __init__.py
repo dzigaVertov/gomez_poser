@@ -31,6 +31,7 @@ bl_info = {
 
 
 import bpy
+from line_profiler import LineProfiler
 from . import gp_armature_applier
 from . import gomez_poser_ui
 from . import gp_rigging_ops

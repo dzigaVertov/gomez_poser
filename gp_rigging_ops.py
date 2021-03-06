@@ -18,11 +18,14 @@ Created by Marcelo Demian Gómez
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import bpy
+from line_profiler import LineProfiler
+
 from mathutils import Vector, Matrix, kdtree
 
 from bpy.props import FloatProperty, IntProperty, FloatVectorProperty, BoolProperty, PointerProperty, CollectionProperty, StringProperty
 from . import gp_auxiliary_objects
 
+profile = LineProfiler()
 
 def is_bone_type(bone, bonetype):
 
@@ -357,7 +360,7 @@ def center_of_mass(positions):
 
     return cm / len(positions)
 
-    
+
 def add_control_bones(context, armature, pos, threshold, group_id):
     """
     Adds control and handle bones in pos positions pointing up (for now) - 
@@ -521,6 +524,7 @@ def add_control_bones(context, armature, pos, threshold, group_id):
             rest_bone.layers[1] = True
             rest_bone.layers[0] = False
             rest_bone.layers[-1] = False
+            rest_bone.layers[6] = False
 
 
 def add_armature(context, gp_ob, stroke, armature, group_id):
@@ -798,3 +802,4 @@ def register():
 def unregister():
     bpy.utils.unregister_class(Gomez_OT_Poser)
     bpy.utils.unregister_class(Gomez_OT_Rig_All_Strokes)
+    profile.dump_stats("/home/marcelo/Desktop/lineprof.prof")
