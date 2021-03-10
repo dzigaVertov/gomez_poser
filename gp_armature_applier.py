@@ -481,6 +481,7 @@ def register():
     bpy.utils.register_class(GOMEZ_OT_clean_baked)
     bpy.utils.register_class(GOMEZ_OT_select_all_stroke_ctrls)
     bpy.utils.register_class(GOMEZ_OT_select_bonegroup)
+    
 
 def unregister():
     bpy.utils.unregister_class(GOMEZ_OT_bake_animation)

@@ -31,12 +31,13 @@ bl_info = {
 
 
 import bpy
-from line_profiler import LineProfiler
+
 from . import gp_armature_applier
 from . import gomez_poser_ui
 from . import gp_rigging_ops
 from . import gp_custom_props
 from . import gp_resampling_ops
+from . import gp_curve_baker
 
 
 
@@ -48,6 +49,7 @@ def register():
     gomez_poser_ui.register()
     gp_rigging_ops.register()
     gp_resampling_ops.register()
+    gp_curve_baker.register()
 
 def unregister():
     gp_armature_applier.unregister()
@@ -55,3 +57,4 @@ def unregister():
     gp_rigging_ops.unregister()
     gp_custom_props.unregister()
     gp_resampling_ops.unregister()
+    gp_curve_baker.unregister()
